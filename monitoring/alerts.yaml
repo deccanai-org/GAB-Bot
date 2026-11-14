@@ -1,0 +1,46 @@
+# Optional Prometheus rules; load through your monitoring platform, not kubectl apply.
+groups:
+  - name: gab-faq
+    rules:
+      - alert: GabFaqDiskSpaceLow
+        expr: gab_storage_free_bytes < 104857600
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Bot data volume has less than 100 MiB free; expand storage or apply the approved retention policy
+      - alert: GabFaqUnready
+        expr: gab_ready == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: Bot is alive but cannot serve requests; inspect readiness checks
+      - alert: GabFaqAnswerTimeouts
+        expr: increase(gab_answers_timeout_total[10m]) > 3
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: FAQ requests are timing out; inspect provider latency and worker saturation
+      - alert: GabFaqWorkerSaturation
+        expr: gab_answers_pending >= 12
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: FAQ worker queue is persistently near capacity
+      - alert: GabFaqStorageFailures
+        expr: increase(gab_storage_errors_total[5m]) > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: Bot storage writes are failing; check PVC capacity and filesystem health
+      - alert: GabFaqTicketDeliveryFailures
+        expr: increase(gab_ticket_check_failures_total[10m]) + increase(gab_reminder_failures_total[10m]) > 3
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Staff-card processing is failing; verify Discord permissions and connectivity
+      - alert: GabFaqTargetUnavailable
+        expr: up{job="gab-faq"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: Bot health/metrics endpoint is unavailable

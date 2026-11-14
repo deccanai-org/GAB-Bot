@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: freelancer-bots-bucketing-dev
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: freelancer-bots-bucketing-dev
+  template:
+    metadata:
+      labels:
+        app: freelancer-bots-bucketing-dev
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '8080'
+        prometheus.io/path: /metrics
+    spec:
+      containers:
+      - name: freelancer-bots-bucketing-dev
+        image: 874846752452.dkr.ecr.ap-south-1.amazonaws.com/freelancer-bots-bucketing-dev:release-required
+        command:
+        - python
+        - bot.py
+        volumeMounts:
+        - name: secrets
+          mountPath: /app/secrets
+          readOnly: true
+        - name: output
+          mountPath: /app/output
+        - name: tmp
+          mountPath: /tmp
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1500m
+            memory: 1536Mi
+        ports:
+        - name: health
+          containerPort: 8080
+        env:
+        - name: GAB_ENVIRONMENT
+          value: production
+        - name: HEALTH_HOST
+          value: 0.0.0.0
+        - name: HEALTH_PORT
+          value: '8080'
+        startupProbe:
+          httpGet:
+            path: /health/ready
+            port: health
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: health
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: health
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: secrets
+        secret:
+          secretName: freelancer-bots-bucketing-dev
+      - name: output
+        persistentVolumeClaim:
+          claimName: freelancer-bots-bucketing-output-dev
+      - name: tmp
+        emptyDir:
+          sizeLimit: 256Mi
+      terminationGracePeriodSeconds: 60
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault

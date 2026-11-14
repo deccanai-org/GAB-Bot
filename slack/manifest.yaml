@@ -1,0 +1,36 @@
+# Paste this at https://api.slack.com/apps -> "Create New App" -> "From a manifest".
+# Create TWO apps from it: one named "... (TEST)" in a test workspace or test channels, and the
+# real one for production. Each gets its own tokens.
+display_information:
+  name: GAB FAQ Bot
+  description: Answers freelancer questions from the GAB project FAQ.
+  background_color: "#175fff"
+features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: GAB FAQ Bot
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read   # see @mentions
+      - chat:write          # post answers
+      - channels:history    # read messages / threads in public channels it is added to
+      - groups:history      # same for private channels it is added to
+      - im:history          # read DMs sent to the bot
+      - reactions:write     # the "eyes" reaction while it is thinking
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.groups
+      - message.im
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false

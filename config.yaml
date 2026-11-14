@@ -1,0 +1,420 @@
+# ─────────────────────────────────────────────────────────────
+#  Discord Message Categorizer — Configuration
+#  Edit this file to define your channels and categories.
+#  No code changes needed!
+# ─────────────────────────────────────────────────────────────
+
+# ── Channels to collect from ──────────────────────────────────
+# Bot scans ALL of these; only messages matching query_detection are saved to disk.
+channel_names:
+  # A section (category) name means every channel in it. The GAB sections use the same
+  # channel names (support, project-related-queries), so they are listed by section; the
+  # export's "section" column tells them apart. NEW PHASE: update these two names.
+  - Project GAB P5 Annotators Deployed
+  - Project GAB P5 QC Deployed
+  - general
+  - announcements
+  - coders-maitrix
+  - maitrix-non-coders
+  - maitrix-QC
+  - maitrix-non-coders-QC
+  - 
+
+# ── FAQ channel (output only) ─────────────────────────────────
+# /export may only be run here; the CSV is posted here. Does NOT need to be
+# in channel_names unless you also want messages from FAQ collected.
+faq_channel_name: "faqs"
+
+# ── Historical backfill ───────────────────────────────────────
+# If false, the bot does NOT scan channel history on startup — only /export
+# fetches past messages from Discord. Live new messages still persist if queries.
+auto_backfill_on_startup: false
+
+# When auto_backfill_on_startup is true: max past messages per channel on startup.
+# Set to 0 to skip backfill even when auto_backfill is true.
+history_limit: 1000
+
+# Max messages fetched per /export (safety cap for very busy channels).
+export_max_messages: 50000
+
+# How many unique (by normalized text) recent queries to show before the CSV.
+export_top_n: 10
+
+# What counts as a "query" for disk storage, live capture, and /export.
+query_detection:
+  question_mark_counts: true
+  phrases:
+    - how do
+    - how to
+    - what is
+    - what are
+    - can someone
+    - can anyone
+    - is there a
+    - does anyone
+    - help
+    - please help
+    - stuck
+    - anyone know
+    - could you
+    - where can i
+    - why is
+
+# ── Categories ────────────────────────────────────────────────
+# Define your own categories below.
+# Each category has:
+#   name        – label used in output files
+#   keywords    – words/phrases that trigger this category
+#                 (case-insensitive, partial match)
+#   description – human-readable hint (used in logs/summary)
+#
+# The bot checks keywords IN ORDER and assigns the FIRST match.
+# If no keyword matches, the message falls into the last
+# category whose name contains "other" / "misc" (case-insensitive),
+# or literally the last category in the list.
+
+categories:
+  - name: Payment related
+    description: "Payments, billing, invoices, refunds"
+    keywords:
+      - payment
+      - pay
+      - paid
+      - invoice
+      - billing
+      - refund
+      - charge
+      - subscription
+      - payout
+      - stripe
+      - paypal
+      - wire transfer
+      - escrow
+
+  - name: Tasks
+    description: "Work items, deadlines, deliverables"
+    keywords:
+      - task
+      - tasks
+      - todo
+      - deadline
+      - deliverable
+      - assignment
+      - milestone
+      - sprint
+      - ticket
+      - scope of work
+      - project
+
+
+  - name: verify yourself
+    description: "Identity verification, KYC, onboarding checks"
+    keywords:
+      - verify
+      - verification
+      - identity
+      - proof of identity
+      - documents
+      - onboarding
+
+  - name: General questions
+    description: "Catch-all for anything that does not match above"
+    keywords: []   # leave empty — fallback bucket
+
+
+# ══════════════════════════════════════════════════════════════
+#  Content Moderation
+# ══════════════════════════════════════════════════════════════
+# Scans ALL channels for foul language and aggressive behaviour.
+# Each tier has a severity score; total score determines action.
+
+moderation:
+  enabled: true
+  alert_channel_name: "mod-alerts"
+
+  # Score thresholds — what happens at each level
+  # Score 1-2: completely ignored (no action, no log, no alert)
+  thresholds:
+    warn_alert: 3      # score 3-4: alert embed in #mod-alerts (no deletion)
+    critical_alert: 5  # score 5+:  alert with @here ping + auto-delete if guardrails pass
+
+  # ── Auto-deletion guardrails ───────────────────────────────
+  # Messages are ONLY auto-deleted when ALL guardrails pass.
+  # This prevents accidental removal of borderline / innocent messages.
+  auto_delete:
+    enabled: true
+    min_score: 5                # must score at least this to consider deletion
+    min_reasons: 2              # must trigger at least 2 different detection reasons
+    min_word_count: 1           # no minimum — even single-word profanity gets deleted
+    require_keyword_tier: true  # at least one keyword tier (not just behavioural signals) must fire
+    # Tiers strong enough to allow deletion on their own (bypass score threshold).
+    # These only need to match + pass min_word_count to trigger deletion.
+    solo_delete_tiers:
+      - threats_and_violence
+      - profanity
+      - hinglish
+    # Channels where auto-delete is disabled (still alerts, just no deletion)
+    exempt_channels: []
+    #  - announcements
+    #  - general
+
+  # ── Periodic audit ─────────────────────────────────────────
+  audit:
+    enabled: true
+    interval_minutes: 30        # how often the audit runs
+    lookback_minutes: 35        # how far back to scan (slight overlap to avoid gaps)
+    max_messages_per_channel: 500
+
+  # Behavioural signals (not keyword-based)
+  aggression_signals:
+    caps_ratio: 0.70            # flag if >70% uppercase (min 8 chars)
+    caps_score: 2
+    excessive_punctuation: 3    # flag if 3+ consecutive !!! or ???
+    excessive_punctuation_score: 1
+    repeated_chars: 5           # flag if same char repeated 5+ times (e.g. "nooooo")
+    repeated_chars_score: 1
+
+  # ── Keyword tiers ──────────────────────────────────────────
+  # score: added per match; a message can match multiple tiers
+
+  mild_aggression:
+    score: 1
+    words:
+      - annoying
+      - nonsense
+      - what a joke
+      - cope
+      - damn
+      - hell
+      - crap
+      - bloody
+      - sucks
+
+  profanity:
+    score: 3
+    words:
+      - idiot
+      - moron
+      - stupid
+      - dumb
+      - loser
+      - clown
+      - trash
+      - garbage
+      - pathetic
+      - worthless
+      - useless
+      - go away
+      - get lost
+      - nobody asked
+      - cry about it
+      - skill issue
+      - you suck
+      - hate you
+      - i hate you
+      - disgusting
+      - creep
+      - freak
+      - psycho
+      - lunatic
+      - get a life
+      - touch grass
+      - are you dumb
+      - are you stupid
+      - learn to read
+      - use your brain
+      - no one cares
+      - who asked
+      - jerk
+      - shut up
+      - shutup
+      - shut it
+      - shut your mouth
+      - shit
+      - bullshit
+      - ass
+      - asshole
+      - bastard
+      - bitch
+      - fuck
+      - fucker
+      - fucking
+      - wtf
+      - stfu
+      - screw you
+      - piss off
+      - dick
+      - prick
+
+  threats_and_violence:
+    score: 5
+    words:
+      - i will kill you
+      - kill you
+      - beat you
+      - hurt you
+      - destroy you
+      - smash you
+      - punch you
+      - slap you
+      - break your face
+      - break your bones
+      - come fight
+      - fight me
+      - watch your back
+      - you are dead
+      - dead man
+      - go die
+      - kys
+
+  hinglish:
+    score: 3
+    words:
+      - chup
+      - chup kar
+      - bakwas
+      - faltu
+      - pagal
+      - bewakoof
+      - nalayak
+      - chutiya
+      - bc
+      - bkl
+      - gandu
+      - harami
+      - saale
+      - kameena
+
+  # Catches intentional obfuscation like f*u*c*k, sh!t, a$$hole
+  obfuscation_patterns:
+    score: 3
+    regexes:
+      - 'f+[\W_]*u+[\W_]*c+[\W_]*k+'
+      - 's+[\W_]*h+[\W_]*i+[\W_]*t+'
+      - 'b+[\W_]*i+[\W_]*t+[\W_]*c+[\W_]*h+'
+      - 'a+[\W_]*s+[\W_]*s+[\W_]*h+[\W_]*o+[\W_]*l+[\W_]*e+'
+      - 'c+[\W_]*h+[\W_]*u+[\W_]*t+[\W_]*i+[\W_]*y+[\W_]*a+'
+
+
+# ══════════════════════════════════════════════════════════════
+#  GAB FAQ answers (Claude)
+# ══════════════════════════════════════════════════════════════
+# The bot answers freelancer questions using the FAQ files in knowledge/current/.
+# Needs the ANTHROPIC_API_KEY secret; without it, this part stays off and the
+# rest of the bot works as before. Channels are listed by name (no #) or by ID.
+
+gab_faq:
+  enabled: true
+  # staging: every reply starts with [TEST BOT]. Change to production at launch.
+  environment: staging
+
+  # Answer engine: all user-facing facts are rendered from approved FAQ entries.
+  # claude: Claude selects FAQ IDs from the whole allowed knowledge base. All AI calls go to
+  #         Anthropic; no other AI provider is supported.
+  # search: local embedding + keyword retrieval, no AI and no API key.
+  # Claude's prose is never published. Unknown/invalid sources are escalated to the team.
+  # claude needs the ANTHROPIC_API_KEY secret. Without it the bot does NOT answer at all
+  # (it does not fall back to search). Set engine: search to run without AI.
+  engine: claude
+
+  search:
+    model: BAAI/bge-small-en-v1.5   # small model that runs inside the bot (downloaded at build time)
+    model_dir: models
+    keyword_weight: 0.3       # how much exact words count next to meaning
+    confident_score: 0.88     # at or above: post the FAQ entry
+    min_score: 0.63           # between the two: post the closest entry as "not sure" + flag it
+                              # below: "not in the FAQ" + flag it
+    role_penalty: 0.1         # entries for the other role (annotator vs QC) rank this much lower
+    summary_penalty: 0.15     # checklist entries rank this much lower unless the question asks for a checklist
+
+  # Used by engine: claude (the active engine)
+  model: claude-opus-5-5
+  effort: low                 # low = fast and cheap; raise to medium if answers need more care
+  max_history_messages: 10    # earlier messages in a thread the bot reads for context
+
+  discord:
+    # Each list can hold channel names, category (section) names, "Category/channel" pairs,
+    # or IDs. A category means every channel in it. Threads follow their parent channel.
+    # NEW PHASE: the GAB section names change (P5 -> P6), so update them below.
+
+    # The server has other projects too: outside these sections the bot ignores everything,
+    # @mentions included.
+    only_in:
+      - Project GAB P5 Annotators Deployed
+      - Project GAB P5 QC Deployed
+    # Where the bot answers EVERY new message. In the other GAB channels (e.g. support) it
+    # answers only when someone @mentions it.
+    answer_channels:
+      - Project GAB P5 Annotators Deployed/project-related-queries
+      - Project GAB P5 QC Deployed/project-related-queries
+    # Off: in a DM the bot can't tell which project or role the person is in.
+    answer_in_dms: false
+    # Which FAQ to use. The two sections have the same channel names, so go by section.
+    annotator_channels:
+      - Project GAB P5 Annotators Deployed
+    qc_channels:
+      - Project GAB P5 QC Deployed
+    qm_channels: []           # only here does the bot use the internal QM documents
+    # Every question the bot can't answer (or isn't sure about) is posted here as a card for the
+    # team, with a "Mark as answered" button. Make it a private, staff-only channel.
+    unanswered_channel: faq-bot-unanswered
+    # Optional: who to tag in the reply when the bot can't answer.
+    # "<@USER_ID>" for a person, "<@&ROLE_ID>" for a role. Leave "" to not tag anyone.
+    escalation_mention: ""
+
+  # Questions nobody has replied to after after_minutes get a reminder message in Discord
+  # asking the team to pick them up (once per question).
+  followup:
+    after_minutes: 60
+    check_every_minutes: 5
+    reminder_channel: ""      # channel name or ID; empty = the unanswered-questions channel
+    # Who the reminder tags: "<@&ROLE_ID>" for a role (e.g. the GAB support team), "<@USER_ID>"
+    # for a person; several separated by spaces. Empty = no one is tagged.
+    reminder_mention: ""
+
+  # Who handles what, and the two request forms (/throttle-request, /task-issue).
+  # Routing is decided by code from this table (gab_faq/routing.py), never by the AI: when the FAQ
+  # can't fully answer, the bot names the contact for that kind of question and tags them on the
+  # staff card. The AI can't answer payment questions or act on requests (limits, resets, roles).
+  support:
+    enabled: true
+    contacts:
+      task_qc:           {name: "Amtul / Adiba", mention: ""}   # task queries and QC
+      playground:        {name: "Rachana",       mention: ""}   # playground issues
+      payment:           {name: "Amtul",         mention: ""}   # payment queries
+      environment_reset: {name: "Divya Sai",     mention: ""}   # environment resets
+      # mention: Discord mentions to tag on the staff card, e.g. "<@123456789012345678>" or
+      # "<@123> <@456>"; empty = name only, no ping. Anything other than <@id>/<@&id> is rejected.
+    throttle_requests_go_to: task_qc   # /throttle-request and task-limit questions
+    task_issues_go_to: task_qc         # /task-issue
+    other_questions_go_to: task_qc     # anything that matches no category above
+    # Where /throttle-request and /task-issue cards are posted (name or ID); empty = the
+    # unanswered-questions channel above. Must be a private, staff-only channel.
+    requests_channel: ""
+    mention_contacts_in_replies: false # true: also tag the contact in the public reply
+    request_cooldown_seconds: 60       # per person, per command
+    max_attachment_mb: 8               # per screenshot
+
+  slack:
+    # Slack uses channel IDs (e.g. C0123ABCD), not names.
+    answer_channels: []
+    answer_in_dms: true
+    annotator_channels: []
+    qc_channels: []
+    qm_channels: []
+    escalation_mention: ""
+
+# Single-server production operating budget. These are validated at startup.
+runtime:
+  answer_workers: 4
+  answer_capacity: 16
+  answer_timeout: 45
+  user_requests_per_minute: 6
+  shutdown_grace: 30
+  health_host: 127.0.0.1       # Kubernetes overrides HEALTH_HOST to 0.0.0.0
+  health_port: 8080
+  export_workers: 2           # also bounds attachment-heavy support submissions
+  export_timeout: 120
+  export_max_rows: 5000
+  export_max_scanned: 20000
+  export_max_bytes: 8388608

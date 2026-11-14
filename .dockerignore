@@ -1,0 +1,14 @@
+.git
+.env*
+*.pem
+.venv
+venv
+__pycache__
+**/__pycache__
+.pytest_cache
+.ruff_cache
+models
+output
+bot.log*
+tests
+eval-report.json

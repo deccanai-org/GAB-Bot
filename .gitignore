@@ -1,0 +1,32 @@
+# Secrets — never commit
+.env
+.env.local
+*.pem
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+
+# Runtime / local data
+bot.log
+output/*.json
+output/*.csv
+.DS_Store
+output/*.jsonl
+eval-report.json
+.pytest_cache/
+models/
+output/*.txt
+output/*.sqlite3*
+.ruff_cache/
+bot.log.*
+artifacts/
+output/*.lock
+output/backups/
+.coverage*
+htmlcov/
