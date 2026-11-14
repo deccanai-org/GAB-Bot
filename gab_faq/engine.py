@@ -1,9 +1,10 @@
-"""Build a guarded search or Claude source-selection engine. Claude (Anthropic) is the only AI provider."""
+"""Build the local FAQ engine. External model providers are disabled."""
 
 from __future__ import annotations
 
 from .config import Settings
 from .knowledge import KnowledgeBase
+from .model_limits import ModelQuota
 
 
 def build_engine(settings: Settings, knowledge: KnowledgeBase):
@@ -13,26 +14,21 @@ def build_engine(settings: Settings, knowledge: KnowledgeBase):
 
     inner = _build_inner(settings, knowledge)
     return GuardedEngine(
-        inner, settings.support, max_history_messages=settings.max_history_messages
+        inner,
+        settings.support,
+        max_history_messages=settings.max_history_messages,
+        quota=ModelQuota(settings.log_dir / "model_usage.sqlite3", settings.model_limits),
+        limits=settings.model_limits,
     )
 
 
 def _build_inner(settings: Settings, knowledge: KnowledgeBase):
-    if settings.engine == "claude":
-        from .brain import Brain
-
-        return Brain(
-            knowledge,
-            model=settings.model,
-            effort=settings.effort,
-            max_history_messages=settings.max_history_messages,
-        )
+    if settings.engine != "search":
+        raise ValueError("External model providers are disabled; engine must be search")
     from .search import FaqSearch
 
     return FaqSearch(knowledge, settings.search)
 
 
 def describe(settings: Settings) -> str:
-    if settings.engine == "claude":
-        return f"Claude ({settings.model})"
-    return f"FAQ search ({settings.search.model})"
+    return f"Local FAQ search ({settings.search.model})"

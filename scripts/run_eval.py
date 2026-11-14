@@ -16,6 +16,7 @@ import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import yaml
 
@@ -27,6 +28,7 @@ from dataclasses import replace  # noqa: E402
 from gab_faq.config import load_environment, load_settings  # noqa: E402
 from gab_faq.engine import build_engine, describe  # noqa: E402
 from gab_faq.knowledge import KnowledgeBase  # noqa: E402
+from gab_faq.model_limits import answer_as_user  # noqa: E402
 
 
 def grade(case: dict, outcome: str, text: str) -> list[str]:
@@ -56,23 +58,27 @@ def main() -> int:
     parser.add_argument("--cases", default=str(ROOT / "tests" / "eval" / "questions.yaml"))
     parser.add_argument("--min-pass", type=float, default=0.9)
     parser.add_argument("--report", default=str(ROOT / "eval-report.json"))
-    parser.add_argument("--engine", choices=["search", "claude"], help="override gab_faq.engine")
+    parser.add_argument("--engine", choices=["search"], help="local FAQ retrieval only")
     args = parser.parse_args()
 
-    load_environment()  # reads ANTHROPIC_API_KEY from .env
+    load_environment()
     settings = load_settings()
     if args.engine:
         settings = replace(settings, engine=args.engine)
     print(f"Engine: {describe(settings)}")
-    brain = build_engine(settings, KnowledgeBase(settings.knowledge_dir))
-    cases = yaml.safe_load(Path(args.cases).read_text())
+    with TemporaryDirectory(prefix="gab-local-eval-") as state:
+        settings = replace(settings, log_dir=Path(state))
+        brain = build_engine(settings, KnowledgeBase(settings.knowledge_dir))
+        cases = yaml.safe_load(Path(args.cases).read_text())
 
-    def run(case):
-        ans = brain.answer(case["question"], role=case.get("role", "unknown"))
-        return case, ans, grade(case, ans.outcome, ans.text)
+        def run(case):
+            ans = answer_as_user(
+                brain, f"eval:{case['id']}", case["question"], case.get("role", "unknown")
+            )
+            return case, ans, grade(case, ans.outcome, ans.text)
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        results = list(pool.map(run, cases))
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(pool.map(run, cases))
 
     report, passed, critical_failures = [], 0, []
     for case, ans, problems in results:

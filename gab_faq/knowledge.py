@@ -20,12 +20,13 @@ from __future__ import annotations
 
 import logging
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import yaml
 
 from .redact import contains_secret
+from .tutorials import TutorialVideo, load_tutorials
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ class FaqDocument:
     # Only approved documents are ever served: "status: archived" or "approved: false" in the
     # header keeps a file out of every answer (see KnowledgeBase.reload_if_changed).
     approved: bool = True
+    tutorials: tuple[TutorialVideo, ...] = ()
 
 
 def parse_document(path: Path) -> FaqDocument:
@@ -90,6 +92,9 @@ class KnowledgeBase:
 
     def _current_signature(self) -> tuple:
         files = sorted(self.directory.glob("*.md"))
+        catalog = self.directory / "playground-videos.yaml"
+        if catalog.exists():
+            files.append(catalog)
         return tuple((f.name, f.stat().st_mtime_ns, f.stat().st_size) for f in files)
 
     def reload_if_changed(self) -> bool:
@@ -99,6 +104,7 @@ class KnowledgeBase:
                 return False
             if not signature:
                 raise FileNotFoundError(f"No FAQ files (*.md) found in {self.directory}")
+            tutorials = load_tutorials(self.directory / "playground-videos.yaml")
             docs = []
             for p in sorted(self.directory.glob("*.md")):
                 doc = parse_document(p)
@@ -113,7 +119,7 @@ class KnowledgeBase:
                         p.name,
                     )
                 else:
-                    docs.append(doc)
+                    docs.append(replace(doc, tutorials=tutorials))
             if not docs:
                 raise FileNotFoundError(f"No approved FAQ files (*.md) in {self.directory}")
             self.documents = docs

@@ -6,7 +6,9 @@ from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
 Role = Literal["annotator", "qc", "qm", "unknown"]
-Outcome = Literal["answered", "partial", "not_in_faq", "needs_human", "small_talk", "error"]
+Outcome = Literal[
+    "answered", "partial", "not_in_faq", "needs_human", "small_talk", "error", "limited"
+]
 ESCALATE_OUTCOMES = frozenset({"partial", "not_in_faq", "needs_human", "error"})
 
 

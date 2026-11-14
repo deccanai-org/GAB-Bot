@@ -4,7 +4,6 @@ Two places, the same as the rest of the bot:
   - Normal settings: the `gab_faq:` section of config.yaml (which channels to answer in, the model...).
   - Secrets: environment variables. Locally they come from .env; in Kubernetes each secret is a file
     in /app/secrets/ named after the variable. Secrets used here:
-      ANTHROPIC_API_KEY   Claude API key (the bot can't answer without it)
       DISCORD_TOKEN       the same bot token the rest of bot.py uses
       SLACK_BOT_TOKEN, SLACK_APP_TOKEN   only for the Slack bot
 
@@ -20,6 +19,7 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
+from .model_limits import ModelLimits
 from .routing import SupportSettings, check_route, parse_contacts
 from .runtime_config import RuntimeSettings
 from .search import SearchSettings
@@ -125,7 +125,7 @@ def _platform(section: dict | None) -> PlatformSettings:
     )
 
 
-ENGINES = ("search", "claude")
+ENGINES = ("search",)
 
 
 @dataclass(frozen=True)
@@ -217,29 +217,27 @@ def _support(section: dict | None) -> SupportSettings:
 class Settings:
     runtime: RuntimeSettings = field(default_factory=RuntimeSettings)
     enabled: bool = False
-    # search: free FAQ search inside the bot (no AI, no API key).
-    # claude: Claude selects approved sources from the whole FAQ (needs ANTHROPIC_API_KEY and a budget).
-    # Anthropic is the only AI provider the bot supports.
+    # Only local FAQ retrieval is allowed; no external inference API.
     engine: str = "search"
     search: SearchSettings = field(default_factory=SearchSettings)
     followup: FollowupSettings = field(default_factory=FollowupSettings)
     # Contacts, /throttle-request and /task-issue (routing.py, support.py).
     support: SupportSettings = field(default_factory=SupportSettings)
     environment: str = "staging"  # staging (replies start with [TEST BOT]) | production
-    model: str = "claude-opus-5-5"
-    effort: str = "low"
-    max_history_messages: int = 10
+    max_history_messages: int = 4
+    model_limits: ModelLimits = field(default_factory=ModelLimits)
     knowledge_dir: Path = PROJECT_ROOT / "knowledge" / "current"
     # Where questions are logged. Same folder the rest of the bot saves its files in.
     log_dir: Path = Path("output")
     discord: PlatformSettings = field(default_factory=PlatformSettings)
     slack: PlatformSettings = field(default_factory=PlatformSettings)
-    anthropic_api_key_set: bool = False
     discord_token: str = field(default="", repr=False)
     slack_bot_token: str = field(default="", repr=False)
     slack_app_token: str = field(default="", repr=False)
 
     def __post_init__(self):
+        if self.engine not in ENGINES:
+            raise ValueError("External model providers are disabled; engine must be search")
         if not 0 <= self.max_history_messages <= 50:
             raise ValueError("max_history_messages must be between 0 and 50")
 
@@ -270,14 +268,12 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         followup=_followup(faq.get("followup")),
         support=_support(faq.get("support")),
         environment=environment,
-        model=str(faq.get("model") or "claude-opus-5-5"),
-        effort=str(faq.get("effort") or "low"),
-        max_history_messages=int(faq.get("max_history_messages", 10)),
+        max_history_messages=int(faq.get("max_history_messages", 4)),
+        model_limits=ModelLimits.parse(faq.get("model_limits")),
         knowledge_dir=knowledge_dir,
         log_dir=Path(faq.get("log_dir") or cfg.get("output_dir") or "output"),
         discord=_platform(faq.get("discord")),
         slack=_platform(faq.get("slack")),
-        anthropic_api_key_set=bool(os.environ.get("ANTHROPIC_API_KEY", "").strip()),
         discord_token=os.environ.get("DISCORD_TOKEN", ""),
         slack_bot_token=os.environ.get("SLACK_BOT_TOKEN", ""),
         slack_app_token=os.environ.get("SLACK_APP_TOKEN", ""),

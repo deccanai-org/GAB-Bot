@@ -1,0 +1,194 @@
+# Supplied links only. Null URLs preserve archive items without guessed links.
+source_archive: Playgrounds-20261114T165201Z-1-001.zip
+updated: '2026-11-14'
+videos:
+- id: playground-01
+  title: Production - Introduction to Production Tasking
+  url: null
+  faq_ids:
+  - PG1
+  - IN6
+  - IN28
+  sha256: a131be33702a7c86698dd4fc3fe1713636c7db50efc3f5ad2c1f8fbb492b5477
+  size_bytes: 7398426
+  archive_paths:
+  - Playgrounds/Post Assessment Latest Playground/1. Introduction to Production Tasking.mp4
+- id: playground-02
+  title: 3B - Introduction and Account Setup
+  url: https://drive.google.com/file/d/1m63i1mS4TgWJG9G7kl5znuc_sZvhDXei/view
+  faq_ids:
+  - PG2
+  - IN8
+  - IN9
+  - IN10
+  - IN11
+  - IN12
+  - IN29
+  sha256: 852f81f60ee118d0cd315f047d3d86c29a51e9494cda2b7c08810a6ac41902fb
+  size_bytes: 15042154
+  archive_paths:
+  - Playgrounds/3B Annotations + Evals/1. Introduction and Account Setup.mp4
+  - Playgrounds/3B Annotation /1. Introduction and Account Setup.mp4
+- id: playground-03
+  title: 3B - Creating Natural Conversations
+  url: null
+  faq_ids:
+  - PG3
+  - IN23
+  - IN24
+  - IN25
+  - IN26
+  - IN27
+  - Q7
+  sha256: a946397b48906c70fe10148e9be5d166da376d66cb5836b6e50522a2d3e25938
+  size_bytes: 71283987
+  archive_paths:
+  - Playgrounds/3B Annotation /2. Creating Natural Conversations.mp4
+  - Playgrounds/3B Annotations + Evals/2. Creating Natural Conversations.mp4
+- id: playground-04
+  title: Production - Debug and Conversation JSONs
+  url: https://drive.google.com/file/d/1SZVrzaVMNQtFdncNUX7pYx92OzEr6Jm6/view
+  faq_ids:
+  - PG4
+  - IN16
+  - IN17
+  - IN18
+  - IN30
+  - IN31
+  - IN32
+  - IN33
+  - IN34
+  - IN35
+  - IN36
+  - A7
+  - Q3
+  - Q14
+  - IN29
+  sha256: eac65e99d7e34270fc841da623e4d2f6285a1fe6683749c83f96013f2c10aa43
+  size_bytes: 30736317
+  archive_paths:
+  - Playgrounds/3B Annotation /3. Debug and Conversation JSONs.mp4
+  - Playgrounds/3B Annotations + Evals/3. Debug and Conversation JSONs.mp4
+  - Playgrounds/Post Assessment Latest Playground/2. Debug and Conversation JSONs.mp4
+- id: playground-05
+  title: Production - Artefacts
+  url: https://drive.google.com/file/d/1ynjoJPBMOtREIhJNKYps3AQJnwkvjZt1/view
+  faq_ids:
+  - PG5
+  - IN14
+  - IN15
+  - A14
+  - IN29
+  sha256: bf8b528af323e027ca7f4d86331c3844c8bbc6520058671de3b3502f397e1264
+  size_bytes: 31033352
+  archive_paths:
+  - Playgrounds/3B Annotations + Evals/4. Artefacts.mp4
+  - Playgrounds/Post Assessment Latest Playground/3. Artefacts.mp4
+  - Playgrounds/3B Annotation /4. Artefacts.mp4
+- id: playground-06
+  title: Production - Reset
+  url: https://drive.google.com/file/d/1BZoB5sg995F931r7RnxskYe81esTNuqf/view
+  faq_ids:
+  - PG6
+  - IN13
+  - A5b
+  - IN29
+  sha256: bfda6730c7a6ff2d7e207560795ff0d441a8566dfd0a9ace496135f40d197091
+  size_bytes: 10756963
+  archive_paths:
+  - Playgrounds/3B Annotation /5. Reset.mp4
+  - Playgrounds/3B Annotations + Evals/5. Reset.mp4
+  - Playgrounds/Post Assessment Latest Playground/4. Reset.mp4
+- id: playground-07
+  title: Evaluation - Criteria and Dimensions
+  url: https://drive.google.com/file/d/1XKv3KRRcj-NkCRUvvT5WGKqM_Zv_sSvO/view?usp=drive_link
+  faq_ids:
+  - PG7
+  - RR1
+  - RR2
+  - RR3
+  - RR4
+  - Q8
+  - Q9
+  - PG8
+  - EV5
+  - EV11
+  - EV13
+  - EV14
+  - EV15
+  - IN29
+  sha256: 4cbbab1a1f636d22be347a573de4ef86fbe7b1838a384fec8e930a6aeee30fc4
+  size_bytes: 77095302
+  archive_paths:
+  - Playgrounds/3B Annotations + Evals/6. Evals- Criteria and Dimensions.mp4
+  - Playgrounds/Pre assessment latest playgrounds/4. Evaluating the Conversation.mp4
+- id: playground-08
+  title: Production - Final preference and justifications
+  url: null
+  faq_ids:
+  - PG8
+  sha256: 8355349bce669ccd52292119eba56abc1fa92d6fe0ac7599fab5142f94442e4f
+  size_bytes: 13230831
+  archive_paths:
+  - Playgrounds/3B Annotations + Evals/7. Final preference and justifications(300 tasks version).mp4
+  - Playgrounds/Post Assessment Latest Playground/5. Final preference and justifications.mp4
+- id: playground-09
+  title: Pre-assessment - Introduction to the tasking
+  url: https://drive.google.com/file/d/16p1SxxAGC3U1DybXTLt7sXfb6-iiHoxz/view?usp=drive_link
+  faq_ids:
+  - PG9
+  - IN29
+  sha256: d30bec5c94263aca727174231f541131bc5661333aab6da7cdfb246dc06c07ec
+  size_bytes: 19555080
+  archive_paths:
+  - Playgrounds/Pre assessment latest playgrounds/1. Introduction to the tasking.mp4
+- id: playground-10
+  title: Pre-assessment - Creating natural conversations
+  url: https://drive.google.com/file/d/1_5fNXy0G7m-2N88szcRcguv3He90GWjg/view?usp=drive_link
+  faq_ids:
+  - PG10
+  - IN29
+  sha256: 2553d4707bb8a9f90343b6aea2475b6f46f1388d6803ff785a43578e5eed8554
+  size_bytes: 54507905
+  archive_paths:
+  - Playgrounds/Pre assessment latest playgrounds/2. Creating natural conversations.mp4
+- id: playground-11
+  title: Pre-assessment - Sharing the Conversation
+  url: https://drive.google.com/file/d/1lN94yyX-jlTyFVwHdoA_MJQNqIXfBQJN/view?usp=drive_link
+  faq_ids:
+  - PG11
+  - IN19
+  - IN20
+  - IN29
+  sha256: 39f1a1390b6bbb8980ed5032a070336798a5b27962bbd6af1b005f53f55fa666
+  size_bytes: 28623989
+  archive_paths:
+  - Playgrounds/Pre assessment latest playgrounds/3. Sharing the Conversation.mp4
+- id: conversation-guidance
+  title: Creating Model Conversations With Task Guidance.mp4
+  url: https://drive.google.com/file/d/1sTNL9IUrZnbDF-6kFt2LUg9GMvoMN7uf/view
+  faq_ids:
+  - PG3
+  - IN3
+  - IN23
+  - IN24
+  - IN25
+  - IN26
+  - IN27
+  - IN29
+  - A18
+  - A19
+  - A20
+  - A21
+  - A22
+  source: User-supplied link; also embedded in v6.1 production instructions, page 6
+- id: tasking-walkthrough
+  title: GAB Tasking Walkthrough.mp4
+  url: https://drive.google.com/file/d/1-Tst4EFQeRxQzL69eLPJIsthxRm_ZGmj/view
+  faq_ids:
+  - PG1
+  - IN6
+  - IN28
+  - IN29
+  - F1
+  source: User-supplied link; also embedded in v6.1 production instructions, page 9

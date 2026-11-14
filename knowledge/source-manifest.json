@@ -1,0 +1,30 @@
+{
+  "imported": "2026-11-14",
+  "pdfs": [
+    {
+      "filename": "QC-FAQ.pdf",
+      "sha256": "1cbd2f542ea9ecef6cbf6ffef6c48e8978e7f65517313d46d18f6cfcabf02e3e",
+      "size_bytes": 387644
+    },
+    {
+      "filename": "Annotation- FAQ.pdf",
+      "sha256": "e11d115b21e061c440af355b42f887db7a01464f3073b46545fca65c0ccbe944",
+      "size_bytes": 731577
+    },
+    {
+      "filename": "GAB - Production - Evaluation Guide - v6.1.pdf",
+      "sha256": "eadd49f3befa6461a49fe826c1b1b93fa36749f2e142030343ea3eec6052c057",
+      "size_bytes": 152620
+    },
+    {
+      "filename": "GAB Instructions - Production - v6.1.pdf",
+      "sha256": "b092d1322bda9999636f1a74a8ed6f54f768419f3ce09fbdf49a00b423fa46f1",
+      "size_bytes": 3798030
+    },
+    {
+      "filename": "GAB Tasking Flow and Rating Methodology - v6.1.pdf",
+      "sha256": "ac5f2e9d3646a1ef413c61f3a4c2d7fd94246dcacd02c0e5df8f4f83ba8b44a8",
+      "size_bytes": 516337
+    }
+  ]
+}

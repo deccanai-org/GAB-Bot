@@ -5,14 +5,15 @@
                         up to 3 screenshots
 
 Each request becomes a card in the staff requests channel (gab_faq.support.requests_channel, or the
-unanswered-questions channel), tagged with the contact chosen by routing.py. The asker gets a private
-(ephemeral) confirmation.
+unanswered-questions channel), and the contact chosen by routing.py is notified by direct message.
+The asker gets a private (ephemeral) confirmation.
 
 Least privilege, enforced here in code:
   - Only in a server, only in the channels the FAQ bot works in (gab_faq.discord.only_in).
   - Nothing here calls an answering engine or AI: the details and screenshots go only to the staff
     card and the request log. The bot can't change a limit or a task itself; a person does.
-  - The card pings only the routed contact; user text in it can't ping anyone.
+  - The card pings nobody. The routed contact gets a direct message (and is pinged in the staff
+    channel only if the DM fails); user text in a card can't ping anyone.
   - One request per person per command every request_cooldown_seconds; inputs are length-limited,
     task IDs and attachments are checked (images or text files, size-limited), secrets are redacted.
 """
@@ -30,7 +31,7 @@ import discord
 from discord import app_commands
 
 from .config import Settings
-from .discord_common import allowed_mentions, channel_keys, find_text_channel
+from .discord_common import allowed_mentions, channel_keys, find_text_channel, notify_contact
 from .redact import redact_secrets, scrub_mentions
 from .replies import QuestionLog
 
@@ -304,13 +305,12 @@ class SupportDesk:
                     files.append(await a.to_file())
             except discord.HTTPException:
                 log.warning("[FAQ] Couldn't copy attachment %s", getattr(a, "filename", "?"))
-        ping = contact.mention or None
+        what = "throttle increase request" if kind == "throttle" else "task issue report"
+        # The card pings nobody. The routed contact is told by direct message instead, and is
+        # pinged in the staff channel only if that DM fails.
         try:
-            await target.send(
-                content=ping,
-                embed=embed,
-                files=files,
-                allowed_mentions=allowed_mentions(ping or ""),
+            posted = await target.send(
+                embed=embed, files=files, allowed_mentions=allowed_mentions()
             )
         except discord.HTTPException:
             log.exception(
@@ -322,6 +322,14 @@ class SupportDesk:
                 ephemeral=True,
             )
             return
+        await notify_contact(
+            self.bot,
+            target,
+            contact,
+            embed=embed,
+            card=posted,
+            intro=f"A new {what} needs your help ({contact.label}). Attachments are on the card.",
+        )
 
         self._last_request[(kind, interaction.user.id)] = self.clock()
         try:
@@ -337,7 +345,6 @@ class SupportDesk:
             )
         except OSError:
             log.exception("[FAQ] Support request delivered but could not be logged")
-        what = "throttle increase request" if kind == "throttle" else "task issue report"
         await interaction.followup.send(
             f"Thanks, your {what} was sent to {contact.name} ({contact.label}). "
             "They'll follow up with you.",

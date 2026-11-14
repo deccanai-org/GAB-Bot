@@ -1,26 +1,6 @@
-"""Access restrictions for the answering engines, enforced in code (not only in the AI's prompt).
-
-Every engine (search, claude) is wrapped in GuardedEngine by engine.build_engine, so Discord,
-Slack, the chat command and the eval all go through the same checks:
-
-  Before the engine sees anything
-    - Requests to DO something (raise a task limit, reset an environment, make or change a payment,
-      change roles/permissions/access) are answered here with a fixed reply and routed to the right
-      person. No engine or AI is called: the bot has no code that can do any of these, and the AI
-      models get no tools (brain.assert_no_tools).
-    - Payment questions are routed to the payment contact without calling any engine.
-    - User text is untrusted: prompt-framing tags are removed, secrets (API keys, tokens, passwords)
-      and personal data (emails, phone/card numbers) are redacted before it can reach an AI.
-    - Thread history is limited to the last few user/bot turns, cleaned the same way.
-
-  After the engine answers
-    - Secrets are redacted and Discord mentions/@everyone are neutralised in the reply.
-    - Any sentence naming a contact person is removed: contacts come only from routing.py.
-    - If a person is needed, the route (who handles it) is set by routing.classify, never by an AI.
-
-What an engine can read is limited elsewhere: the approved FAQ files (knowledge.py skips archived,
-unapproved or secret-containing files; QM-only files only for QMs) and the asker's own conversation in
-a channel the bot is allowed to answer in (discord_answers.py / slack_app.py).
+"""Local FAQ safeguards: bounded questions/history, durable per-user quotas,
+secret scrubbing, audience restrictions and code-owned human escalation.
+No external model calls or generated answer text are used.
 """
 
 from __future__ import annotations
@@ -30,6 +10,7 @@ import re
 
 from .contracts import Answer
 from .conversation import normalize_history
+from .model_limits import USER_KEY, ModelLimits, ModelQuota, QuotaExceeded
 from .redact import clean_untrusted, redact_secrets, scrub_mentions
 from .routing import SupportSettings, classify, contact_names, hint_for
 from .search import NOT_FOUND, PAYMENT_REPLY, is_payment_question
@@ -137,15 +118,30 @@ def remove_contact_claims(text: str, names: list[str]) -> str:
 class GuardedEngine:
     """Same interface as every engine: answer(question, role, history) -> Answer."""
 
-    def __init__(self, inner, support: SupportSettings, max_history_messages: int = 10):
+    def __init__(
+        self,
+        inner,
+        support: SupportSettings,
+        max_history_messages: int = 4,
+        quota: ModelQuota | None = None,
+        limits: ModelLimits | None = None,
+    ):
         self.inner = inner
         self.support = support
         self.max_history_messages = max_history_messages
+        self.quota = quota
+        self.limits = limits or ModelLimits()
 
     def answer(
         self, question: str, role: str = "unknown", history: list[dict] | None = None
     ) -> Answer:
         q = clean_untrusted(question or "")
+        if len(q) > self.limits.max_question_chars:
+            return Answer(
+                f"Please keep your question under {self.limits.max_question_chars} characters.",
+                "limited",
+                via="guard: question limit",
+            )
 
         action = detect_action(q)
         if action:
@@ -172,7 +168,37 @@ class GuardedEngine:
                 route="payment",
             )
 
-        answer = self.inner.answer(q, role, safe_history(history, self.max_history_messages))
+        if self.quota is not None:
+            from .search import GREETING_REPLY, THANKS_REPLY, THANKS_WORDS, WORD_RE, is_small_talk
+
+            if is_small_talk(q):
+                text = (
+                    THANKS_REPLY
+                    if set(WORD_RE.findall(q.lower())) & THANKS_WORDS
+                    else GREETING_REPLY
+                )
+                return Answer(text, "small_talk", via="guard: local greeting")
+            try:
+                self.quota.reserve(USER_KEY.get())
+            except QuotaExceeded as error:
+                return Answer(str(error), "limited", via="guard: model quota")
+            except Exception:
+                log.exception("Cannot verify model quota; refusing a model call")
+                return Answer(
+                    "Model usage limits are temporarily unavailable. Please try later.",
+                    "limited",
+                    via="guard: model quota",
+                )
+        recent = safe_history(history, self.max_history_messages)
+        for message in recent:
+            message["content"] = message["content"][: self.limits.max_history_message_chars]
+        answer = self.inner.answer(q, role, recent)
+        if len(answer.text) > self.limits.max_answer_chars:
+            answer = Answer(
+                "This FAQ answer is too long to post here. A team member can help with the full guidance.",
+                "needs_human",
+                escalation_reason="FAQ answer length limit",
+            )
         return self.check_output(answer, q)
 
     def check_output(self, answer: Answer, question: str) -> Answer:

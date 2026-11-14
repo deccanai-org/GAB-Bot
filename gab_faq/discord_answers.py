@@ -11,11 +11,18 @@ import discord
 
 from .config import Settings, load_environment, load_settings
 from .contracts import Answer
-from .discord_common import allowed_mentions, channel_keys, find_text_channel, strip_mentions
+from .discord_common import (
+    allowed_mentions,
+    channel_keys,
+    find_text_channel,
+    notify_contact,
+    strip_mentions,
+)
 from .discord_common import readable_channels as readable_channels
 from .engine import build_engine, describe
 from .followup import Followup, card_footer
 from .knowledge import KnowledgeBase
+from .model_limits import answer_as_user
 from .operations import BoundedAnswers, Busy
 from .redact import redact_secrets
 from .replies import QuestionLog, format_reply, split_message
@@ -152,7 +159,14 @@ class FaqAnswerer:
             history = await self._history(message)
             try:
                 answer = await self.executor.answer(
-                    partial(self.brain.answer, question, role, history),
+                    partial(
+                        answer_as_user,
+                        self.brain,
+                        f"discord:{message.author.id}",
+                        question,
+                        role,
+                        history,
+                    ),
                     user=str(message.author.id),
                     conversation=f"{channel.id}:{message.author.id}",
                 )
@@ -164,6 +178,16 @@ class FaqAnswerer:
                     "I couldn't finish the FAQ lookup in time. A team member can help.",
                     "error",
                     escalation_reason="answer deadline exceeded",
+                )
+            except Exception:
+                # Anything else the engine didn't handle (an AI/API failure, a bug): still reply,
+                # and hand the question to the right person instead of going silent.
+                log.exception("[FAQ] Answering failed for message %s; escalating it", message.id)
+                answer = Answer(
+                    "Sorry, I couldn't process that right now. I've flagged it so a team member "
+                    "can help you.",
+                    "error",
+                    escalation_reason="answering failed unexpectedly",
                 )
         self._ensure_route(answer, question)
         question = redact_secrets(question)
@@ -346,24 +370,31 @@ class FaqAnswerer:
             footer=card_footer(message.channel.id, message.id, message.author.id),
             route_to=f"{contact.name} ({contact.label})" if contact else "",
         )
-        # The card pings only the routed contact (if a mention is configured), in the staff channel.
-        ping = contact.mention if contact and contact.mention else None
+        # The card pings nobody. The routed contact (if a mention is configured) is told by direct
+        # message instead; they are pinged in the staff channel only if that DM fails.
         try:
             posted = await target.send(
-                content=ping,
                 embed=embed,
                 view=self.followup.card_view(),
-                allowed_mentions=allowed_mentions(ping or ""),
+                allowed_mentions=allowed_mentions(),
             )
             if posted is not None:
                 await self.followup.track(posted, target)
-            return True
         except discord.HTTPException:
             log.exception(
                 "[FAQ] Couldn't post to #%s (does the bot have Send Messages + Embed Links there?)",
                 getattr(target, "name", target),
             )
             return False
+        await notify_contact(
+            self.bot,
+            target,
+            contact,
+            embed=embed,
+            card=posted,
+            intro=f"A question needs your help ({contact.label})." if contact else "",
+        )
+        return True
 
 
 def setup_faq_answers(bot: discord.Client, config_path=None) -> FaqAnswerer | None:
@@ -384,12 +415,6 @@ def _setup(bot: discord.Client, config_path=None) -> FaqAnswerer | None:
     settings = load_settings(config_path) if config_path is not None else load_settings()
     if not settings.enabled:
         log.info("[FAQ] Answering is OFF (gab_faq.enabled is false in config.yaml)")
-        return None
-    if settings.engine == "claude" and not settings.anthropic_api_key_set:
-        log.warning(
-            "[FAQ] Answering is OFF: engine is claude but ANTHROPIC_API_KEY is not set "
-            "(use engine: search for the free FAQ search)"
-        )
         return None
     knowledge = KnowledgeBase(settings.knowledge_dir)
     brain = build_engine(settings, knowledge)

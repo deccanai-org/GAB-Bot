@@ -34,6 +34,7 @@ from typing import Protocol
 from .contracts import Answer
 from .knowledge import FaqDocument, KnowledgeBase
 from .storage import atomic_write
+from .tutorials import TutorialVideo, with_tutorials
 
 log = logging.getLogger(__name__)
 
@@ -139,10 +140,15 @@ class Entry:
     document: str
     # For summary entries (see SUMMARY_RE): words that show the question is about the summary itself.
     triggers: tuple[str, ...] = ()
+    tutorials: tuple[TutorialVideo, ...] = ()
 
     @property
     def text(self) -> str:
         return f"{self.title}\n{self.body}".strip()
+
+    @property
+    def answer_body(self) -> str:
+        return with_tutorials(self.body, self.tutorials)
 
 
 def split_entries(doc: FaqDocument) -> list[Entry]:
@@ -168,6 +174,7 @@ def split_entries(doc: FaqDocument) -> list[Entry]:
                     item_audience or doc.audience,
                     doc.title,
                     item_triggers,
+                    tuple(video for video in doc.tutorials if item_id in video.faq_ids),
                 )
             )
 
@@ -236,6 +243,17 @@ def with_thread_context(question: str, history: list[dict] | None) -> str:
         "",
     )
     if previous and (FOLLOWUP_RE.match(question) or len(words(question)) <= 2):
+        # A follow-up about B changes the earlier product's subject. Keeping both
+        # letters made a simple follow-up retrieve a mixed-model answer.
+        previous_products = list(AB_RE.finditer(previous.lower()))
+        followup_products = list(AB_RE.finditer(question.lower()))
+        if len(previous_products) == len(followup_products) == 1:
+            earlier, target = previous_products[0], followup_products[0]
+            previous = (
+                previous[: earlier.start()]
+                + f"{earlier.group(1)} {target.group(2).upper()}"
+                + previous[earlier.end() :]
+            )
         return f"{previous.strip()} {question}"
     return question
 
@@ -280,7 +298,9 @@ class FastEmbedder:
         from fastembed import TextEmbedding  # imported here so tests don't need the model
 
         onnxruntime.disable_telemetry_events()
-        self.model = TextEmbedding(model_name=model_name, cache_dir=str(cache_dir), threads=1)
+        self.model = TextEmbedding(
+            model_name=model_name, cache_dir=str(cache_dir), threads=1, local_files_only=True
+        )
         artifact = self.model.model._model_dir / self.model.model.model_description.model_file
         with artifact.open("rb") as handle:
             self.fingerprint = hashlib.file_digest(handle, "sha256").hexdigest()
@@ -349,7 +369,7 @@ UNSURE_INTRO = "I'm not sure the FAQ covers this exactly. The closest entry is b
 
 def _entry_block(entry: Entry) -> str:
     text = f"From the GAB FAQ ({entry.id}. {entry.title}):"
-    return f"{text}\n{entry.body}" if entry.body else text
+    return f"{text}\n{entry.answer_body}" if entry.answer_body else text
 
 
 def format_entry_answer(best: Entry, related: Entry | None = None, unsure: bool = False) -> str:

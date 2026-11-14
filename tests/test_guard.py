@@ -5,8 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from gab_faq.brain import Answer, Brain, ToolUseForbidden, assert_no_tools
 from gab_faq.config import _support
+from gab_faq.contracts import Answer
+from gab_faq.conversation import ToolUseForbidden, assert_no_tools
 from gab_faq.discord_answers import readable_channels
 from gab_faq.guard import GuardedEngine, detect_action, safe_history
 from gab_faq.knowledge import KnowledgeBase
@@ -16,9 +17,6 @@ from gab_faq.routing import SupportSettings, classify, hint_for, parse_contacts,
 from gab_faq.search import NOT_FOUND
 
 from .conftest import ROOT
-from .test_rag import FakeAI
-from .test_rag import make as make_rag
-from .test_search import FAQ, QM_FAQ
 
 SUPPORT = SupportSettings()
 
@@ -238,28 +236,6 @@ def test_requests_with_tools_are_refused():
     assert assert_no_tools({"model": "m"}) == {"model": "m"}
 
 
-def test_claude_requests_have_no_tools(knowledge, fake_client_factory):
-    request = Brain(knowledge, client=fake_client_factory()).build_request(
-        "which model?", "annotator", []
-    )
-    assert not set(request) & {"tools", "tool_choice", "functions", "mcp_servers"}
-
-
-@pytest.fixture
-def faq_dir(tmp_path):
-    (tmp_path / "a.md").write_text(FAQ)
-    (tmp_path / "qm.md").write_text(QM_FAQ)
-    return tmp_path
-
-
-def test_tools_slipped_in_through_config_are_refused(faq_dir):
-    ai = FakeAI({"answer": "Flash.", "outcome": "answered", "sources": ["A1"]})
-    ans = make_rag(faq_dir, ai, extra_params={"tools": [{"type": "function"}]}).answer(
-        "which model?", role="annotator"
-    )
-    assert ai.calls == [] and ans.via.startswith("faq-search (AI skipped: AI request refused")
-
-
 # --- Knowledge sources: only approved, secret-free FAQ files ---
 
 
@@ -281,7 +257,8 @@ def test_only_approved_secret_free_faq_files_are_used(tmp_path):
 
 def test_the_current_faq_files_are_all_approved_and_secret_free():
     kb = KnowledgeBase(ROOT / "knowledge" / "current")
-    assert len(kb.documents) == 9 and not any(contains_secret(d.body) for d in kb.documents)
+    assert kb.documents and all(d.approved for d in kb.documents)
+    assert not any(contains_secret(d.body) for d in kb.documents)
 
 
 # --- Discord permissions ---

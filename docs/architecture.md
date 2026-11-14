@@ -16,7 +16,8 @@ The OS-backed owner lock prevents two local processes using the same output dire
 | `conversation.py` | History normalization and tool-free request policy |
 | `knowledge.py`, `search.py` | Approved knowledge loading, audience restrictions, retrieval |
 | `grounding.py` | Shared source-selection instructions and deterministic source rendering |
-| `brain.py` | Claude (Anthropic) request and source-selection parsing |
+| `tutorials.py` | Approved playground links mapped to FAQ IDs, shared by both answer engines |
+| `model_limits.py` | Durable per-user question quotas and adapter-bound user identity |
 | `guard.py`, `routing.py`, `redact.py` | Input/output guards, configured contacts, text privacy |
 | `discord_common.py` | Mention allowlists, channel keys, readable sources, guild-local destinations |
 | `discord_answers.py`, `followup.py` | FAQ replies, explicit delivery results, cards and reminders |
@@ -67,12 +68,11 @@ but cannot make Discord and SQLite a single atomic transaction.
 
 ## Answer trust
 
-Claude (Anthropic, the only AI provider) chooses FAQ IDs and an outcome. Its
-generated prose is never published. The application resolves selected IDs only
-against sources available to the asker and renders the approved entry text.
-Invalid selections become a human escalation. Contact assignments remain in
-code. This prevents invented provider prose from becoming rules or action claims;
-it does not prove that the selected entry is relevant to the question.
+External model providers are disabled. Only local CPU embeddings and keywords
+select FAQ entries. The application renders the approved text and supplied video
+links, with audience filtering before retrieval. Low-confidence or absent matches
+escalate to humans. No questions, history or FAQ excerpts go to a model service.
+Runtime weights are loaded from local files, and ONNX telemetry is disabled.
 
 Keyword-only fallback always marks a retrieved answer uncertain and escalates it.
 It does not reuse semantic-search confidence thresholds as evidence of certainty.

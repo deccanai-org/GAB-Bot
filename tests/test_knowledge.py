@@ -9,7 +9,12 @@ from .conftest import ROOT
 
 # Model names from earlier phases. If any of these appear in knowledge/current/, the bot could tell
 # freelancers to use the wrong model. Add to this list whenever a phase is archived.
-ARCHIVED_MODEL_NAMES = ["GOAT-on-Thorin", "ultra_carbon_dte_test_arm", "Gemini 3.6"]
+ARCHIVED_MODEL_NAMES = [
+    "Model Locust",
+    "Claude Sonnet 5.5",
+    "ultra_carbon_dte_test_arm",
+    "Gemini 3.6",
+]
 
 # Phrases that only appear in the internal QM documents.
 QM_ONLY_PHRASES = ["1 out of every 5", "QM Audit template", "chat.google.com"]
@@ -18,24 +23,27 @@ QM_ONLY_PHRASES = ["1 out of every 5", "QM Audit template", "chat.google.com"]
 def test_current_faq_loads(knowledge):
     names = {d.path.name for d in knowledge.documents}
     assert {
-        "phase5-annotation.md",
-        "phase5-qc.md",
-        "screen-recording.md",
-        "phase5-task-flow.md",
-        "phase5-annotator-instructions.md",
-        "phase5-qc-checklist.md",
-        "phase5-qc-audit-spec.md",
+        "phase6-annotation.md",
+        "phase6-qc.md",
+        "phase6-recording.md",
+        "phase6-methodology.md",
+        "phase6-instructions.md",
+        "phase6-evaluation.md",
+        "playground-help.md",
         "rating-reference.md",
-        "qm-process.md",
     } <= names
 
 
-def test_qm_documents_hidden_from_everyone_but_qms(knowledge):
+def test_qm_documents_hidden_from_everyone_but_qms(tmp_path):
+    (tmp_path / "shared.md").write_text("---\naudience: all\n---\nA1. Shared\nShared text.")
+    (tmp_path / "internal.md").write_text("---\naudience: qm\n---\nQM1. Internal\nQM_ONLY_TEST.")
+    knowledge = KnowledgeBase(tmp_path)
     for role in ("annotator", "qc", "unknown"):
         text = knowledge.render(role)
         assert "qm-process" not in text and 'audience="qm"' not in text
-        assert "Phase 5 task flow" in text  # shared documents still there
+        assert "Shared text" in text and "QM_ONLY_TEST" not in text
     assert 'audience="qm"' in knowledge.render("qm")
+    assert "QM_ONLY_TEST" in knowledge.render("qm")
 
 
 def test_qm_only_facts_live_only_in_qm_documents(knowledge):
@@ -45,17 +53,16 @@ def test_qm_only_facts_live_only_in_qm_documents(knowledge):
         assert phrase not in shared, f"{phrase!r} leaked into a non-QM document"
 
 
-def test_task_flow_has_every_stage(knowledge):
+def test_task_flow_covers_current_runs_and_stage4_scope(knowledge):
     text = knowledge.render("annotator")
     for stage in [
-        "Default Annotation",
-        "Agent",
-        "Quality Check",
-        "Holding Layer",
-        "QA",
-        "Super QA",
-        "Re-Annotation",
-        "Holding Layer 2",
+        "Product A",
+        "Product B",
+        "Reset ID",
+        "Stage 4",
+        "artefact check",
+        "pre-filled",
+        "SxS",
     ]:
         assert stage in text
 
@@ -78,8 +85,15 @@ def test_current_faq_has_no_archived_model_names(knowledge, old_name):
 
 def test_current_faq_has_current_models(knowledge):
     text = knowledge.render()
-    for name in ["Flash", "Model Locust", "Claude Sonnet 5.5"]:
+    for name in ["GOAT-on-Thorin DTE (Gmail Fixes)", "flash_dte_test_arm", "GPT-5.6 Terra High"]:
         assert name in text
+
+
+def test_old_recording_and_queue_requirements_are_not_active(knowledge):
+    assert all(doc.phase == "6.1" for doc in knowledge.documents)
+    assert "No screen recording is needed for Phase 6.1" in knowledge.render()
+    assert "5 hours after you pick it up" not in knowledge.render()
+    assert "1 out of every 5" not in knowledge.render("qm")
 
 
 def test_every_document_has_valid_header(knowledge):

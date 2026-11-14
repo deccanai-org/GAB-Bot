@@ -81,7 +81,7 @@ def test_split_entries(faq_dir):
 def test_real_faq_entries_have_unique_ids():
     kb = KnowledgeBase(ROOT / "knowledge" / "current")
     ids = [e.id for d in kb.documents for e in split_entries(d)]
-    assert len(ids) >= 140
+    assert {"A1", "A8", "EV1", "EV16", "IN35", "Q14", "PG11", "RR7h"} <= set(ids)
     assert not [i for i, n in Counter(ids).items() if n > 1], "two FAQ entries share an ID"
 
 
@@ -254,14 +254,15 @@ def _load_real_search():
     "question,role,expected",
     [
         ("which model do i pick for product A?", "annotator", "A1"),
-        ("debug json shows null for model A, should I reject?", "qc", "Q14"),
-        ("how long do I have before a task expires?", "annotator", "F8"),
+        ("debug json shows null for model A, should I reject?", "qc", {"Q14", "F5"}),
+        ("When should I score each product?", "annotator", "F3"),
         ("Should model memory be on or off?", "annotator", "IN9"),
     ],
 )
 def test_real_model_finds_the_right_entry(question, role, expected):
     ans = _real_search().answer(question, role=role)
-    assert ans.outcome == "answered" and ans.sources[0] == expected
+    expected_ids = {expected} if isinstance(expected, str) else expected
+    assert ans.outcome == "answered" and ans.sources[0] in expected_ids
 
 
 def test_real_model_does_not_invent_answers_for_off_topic():
@@ -280,11 +281,10 @@ def test_real_model_no_confident_answer_from_one_shared_word(question):
 @pytest.mark.parametrize(
     "question,role,expected",
     [
-        # The task-flow file is for everyone, but limits differ by role (F7/F9/F6 annotators, F13/F15 QC).
-        ("how many tasks can I pick up per hour?", "qc", "F13"),
-        ("how many tasks can I pick up per hour?", "annotator", "F7"),
-        ("how long can I keep a task paused?", "qc", "F13"),
-        ("how long can I see feedback on my work?", "annotator", "F6"),
+        ("What is the Stage 4 human evaluation workflow?", "qc", "EV1"),
+        ("Which ratings can I correct in Stage 4?", "qc", "EV2"),
+        ("How do I run the ChatGPT export script?", "annotator", "IN35"),
+        ("Which model is Product B?", "annotator", "A2"),
         # Checklists used to be outside any numbered entry, so the bot could not find them.
         ("what's on the pre-submission checklist?", "annotator", "A15"),
         ("is there a checklist I should run before approving a task?", "qc", "Q19"),
@@ -301,7 +301,7 @@ def test_real_model_follow_up_in_a_thread_uses_the_earlier_question():
         {"role": "assistant", "content": "From the GAB FAQ (A1. Which model is Product A?): ..."},
     ]
     ans = _real_search().answer("and for product B?", role="annotator", history=history)
-    assert ans.outcome == "answered" and "Sonnet 5.5" in ans.text
+    assert ans.outcome == "answered" and "GPT-5.6 Terra High" in ans.text
 
 
 # --- Coverage: every guideline in knowledge/current/ must be inside a numbered entry ---
@@ -425,10 +425,20 @@ def test_thread_context_only_for_short_follow_ups():
     ]
     assert (
         with_thread_context("and for product B?", history)
-        == "which model for product A? and for product B?"
+        == "which model for product B? and for product B?"
     )
     assert with_thread_context("what about QC?", history).startswith("which model")
     assert with_thread_context("how do I reset the environment after model A?", history).startswith(
         "how do I reset"
     )
     assert with_thread_context("and for product B?", None) == "and for product B?"
+    assert (
+        with_thread_context(
+            "and for Model A?", [{"role": "user", "content": "Which model for Model B?"}]
+        )
+        == "Which model for model A? and for Model A?"
+    )
+    both = [{"role": "user", "content": "How do Product A and Product B differ?"}]
+    assert with_thread_context("and for Product B?", both).startswith(
+        "How do Product A and Product B differ?"
+    )

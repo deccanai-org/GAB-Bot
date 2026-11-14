@@ -113,8 +113,10 @@ termination grace period is the final process boundary.
 
 For gateway outages, inspect connectivity and permissions before restarting. For
 storage errors, stop rollout, inspect free space/mount health, and retain the PVC.
-For AI outages/quota exhaustion, verify retrieval fallback works; do not expose
-credentials while debugging. Do not increase workers until measuring CPU/memory.
+For FAQ quota exhaustion, the bot sends a local limit reply without another
+lookup or staff-card flood. Missing embedding weights use uncertain keyword
+retrieval, never an external model fallback. Keep quota state on the output PVC
+and include it in backup/restore. Do not increase workers before measuring load.
 
 ## Backups, restore, and retention
 

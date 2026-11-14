@@ -21,7 +21,7 @@ def main():
             "Image acceptance failed: precomputed FAQ index unavailable to runtime user"
         )
     answer = engine.answer("which model do i pick for product A?", role="annotator")
-    if "Locust" not in answer.text or "A1" not in answer.sources:
+    if "flash_dte_test_arm" not in answer.text or "A1" not in answer.sources:
         raise SystemExit("Image acceptance failed: representative FAQ lookup is incorrect")
     print("Offline image acceptance passed")
 

@@ -4,12 +4,47 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
-from gab_faq.brain import Answer
+import discord
+import pytest
+
 from gab_faq.config import Settings, _platform
+from gab_faq.contracts import Answer
 from gab_faq.discord_answers import FaqAnswerer
 from gab_faq.replies import QuestionLog
+from gab_faq.routing import SupportSettings, parse_contacts
 
 BOT_USER = SimpleNamespace(id=999, name="faq-bot")
+
+
+class FakeDMUser:
+    """A staff contact: records the DMs it receives, or refuses them like a user with DMs closed."""
+
+    def __init__(self, id, closed=False):
+        self.id, self.closed, self.sent = id, closed, []
+
+    async def send(self, content=None, **kwargs):
+        if self.closed:
+            raise discord.Forbidden(
+                SimpleNamespace(status=403, reason="Forbidden"), "Cannot send messages to this user"
+            )
+        self.sent.append((content, kwargs))
+
+
+class FakeDirectory:
+    """The bot's user lookups. Unknown IDs behave like deleted accounts; `explode` simulates an
+    unexpected (non-Discord) error."""
+
+    def __init__(self, *users, explode=False):
+        self.users = {user.id: user for user in users}
+        self.explode = explode
+
+    def get_user(self, user_id):
+        if self.explode:
+            raise RuntimeError("synthetic failure")
+        return self.users.get(user_id)
+
+    async def fetch_user(self, user_id):
+        raise discord.NotFound(SimpleNamespace(status=404, reason="Not Found"), "Unknown User")
 
 
 class FakeChannel:
@@ -95,20 +130,32 @@ class FakeBrain:
         return self.answer_to_give
 
 
-def make(tmp_path: Path, brain=None, **discord_cfg):
+def make(tmp_path: Path, brain=None, support=None, directory=None, **discord_cfg):
     general = FakeChannel("general", 10)
     ask = FakeChannel("ask-the-bot", 11)
     qc = FakeChannel("maitrix-qc", 12)
     unanswered = FakeChannel("faq-bot-unanswered", 13)
     guild = SimpleNamespace(text_channels=[general, ask, qc, unanswered])
-    bot = SimpleNamespace(user=BOT_USER, guilds=[guild], get_channel=lambda i: None)
+    directory = directory or FakeDirectory()
+    bot = SimpleNamespace(
+        user=BOT_USER,
+        guilds=[guild],
+        get_channel=lambda i: None,
+        get_user=directory.get_user,
+        fetch_user=directory.fetch_user,
+    )
     cfg = {
         "answer_channels": ["ask-the-bot"],
         "qc_channels": ["maitrix-qc"],
         "unanswered_channel": "faq-bot-unanswered",
     }
     cfg.update(discord_cfg)
-    settings = Settings(enabled=True, environment="production", discord=_platform(cfg))
+    settings = Settings(
+        enabled=True,
+        environment="production",
+        discord=_platform(cfg),
+        support=support or SupportSettings(),
+    )
     answerer = FaqAnswerer(
         bot, settings, brain or FakeBrain(), QuestionLog(tmp_path, environment="production")
     )
@@ -181,6 +228,93 @@ def test_unanswered_question_posted_for_the_team(tmp_path):
     assert (tmp_path / "faq_unanswered.jsonl").exists()
 
 
+# --- Contacts are told by DM; the staff card itself pings nobody ---
+
+
+def not_in_faq():
+    return FakeBrain(Answer("I don't have that in the FAQ.", "not_in_faq", escalation_reason="pay"))
+
+
+def contacts(**mentions):
+    """SupportSettings whose routes carry these mentions, e.g. payment="<@111111111>"."""
+    names = {"payment": "Amtul", "task_qc": "Amtul / Adiba"}
+    return SupportSettings(
+        contacts=parse_contacts(
+            {route: {"name": names[route], "mention": text} for route, text in mentions.items()}
+        )
+    )
+
+
+def ask_about_payment(answerer, guild, ch):
+    assert run(answerer.handle(FakeMessage("when do we get paid?", ch.ask, guild))) is True
+
+
+def test_contact_is_notified_by_dm_and_the_staff_card_pings_nobody(tmp_path):
+    amtul = FakeDMUser(111111111)
+    answerer, guild, ch = make(
+        tmp_path,
+        not_in_faq(),
+        support=contacts(payment="<@111111111>"),
+        directory=FakeDirectory(amtul),
+    )
+    ask_about_payment(answerer, guild, ch)
+    ((content, kwargs),) = ch.unanswered.sent  # only the card: no extra ping message
+    assert content is None and kwargs["allowed_mentions"].users is False
+    ((dm_text, dm),) = amtul.sent
+    assert "payment queries" in dm_text
+    assert "https://discord.com/channels/1/13/100000" in dm_text  # link to the staff card
+    assert {f.name: f.value for f in dm["embed"].fields}["Question"] == "when do we get paid?"
+    assert dm["allowed_mentions"].users is False  # the DM itself pings nobody else
+
+
+@pytest.mark.parametrize("problem", ["closed", "missing", "unexpected"])
+def test_a_contact_who_cannot_be_messaged_is_pinged_in_the_staff_channel(tmp_path, problem):
+    directory = {
+        "closed": FakeDirectory(FakeDMUser(111111111, closed=True)),  # DMs turned off
+        "missing": FakeDirectory(),  # account not found
+        "unexpected": FakeDirectory(explode=True),  # not even a Discord error
+    }[problem]
+    answerer, guild, ch = make(
+        tmp_path, not_in_faq(), support=contacts(payment="<@111111111>"), directory=directory
+    )
+    ask_about_payment(answerer, guild, ch)  # the failed DM must not undo or fail the delivery
+    (card, ping) = ch.unanswered.sent
+    assert card[0] is None
+    assert ping[0] == "<@111111111>"
+    allowed = ping[1]["allowed_mentions"]
+    assert [o.id for o in allowed.users] == [111111111]
+    assert allowed.roles is False and allowed.everyone is False
+    assert ping[1]["reference"].embeds  # the ping replies to the card
+
+
+def test_a_role_contact_is_pinged_in_the_channel_because_roles_cannot_be_dmd(tmp_path):
+    answerer, guild, ch = make(tmp_path, not_in_faq(), support=contacts(payment="<@&777777777>"))
+    ask_about_payment(answerer, guild, ch)
+    (_card, ping) = ch.unanswered.sent
+    assert ping[0] == "<@&777777777>"
+    assert [r.id for r in ping[1]["allowed_mentions"].roles] == [777777777]
+
+
+def test_only_the_routed_contact_is_messaged(tmp_path):
+    amtul, adiba = FakeDMUser(111111111), FakeDMUser(222222222)
+    answerer, guild, ch = make(
+        tmp_path,
+        not_in_faq(),
+        support=contacts(payment="<@111111111>", task_qc="<@222222222>"),
+        directory=FakeDirectory(amtul, adiba),
+    )
+    ask_about_payment(answerer, guild, ch)
+    assert len(amtul.sent) == 1 and adiba.sent == []
+    assert len(ch.unanswered.sent) == 1
+
+
+def test_no_mention_configured_means_nobody_is_messaged_or_pinged(tmp_path):
+    amtul = FakeDMUser(111111111)
+    answerer, guild, ch = make(tmp_path, not_in_faq(), directory=FakeDirectory(amtul))
+    ask_about_payment(answerer, guild, ch)
+    assert amtul.sent == [] and len(ch.unanswered.sent) == 1
+
+
 def test_missing_unanswered_channel_is_not_an_error(tmp_path):
     brain = FakeBrain(Answer("?", "not_in_faq"))
     answerer, guild, ch = make(tmp_path, brain, unanswered_channel="does-not-exist")
@@ -210,9 +344,30 @@ def test_empty_mention_gets_greeting(tmp_path):
     assert brain.calls == []
 
 
+def test_an_engine_crash_is_still_answered_and_handed_to_the_right_person(tmp_path):
+    amtul = FakeDMUser(111111111)
+    answerer, guild, ch = make(
+        tmp_path,
+        FakeBrain(error=RuntimeError("boom")),  # e.g. an AI error the engine didn't handle
+        support=contacts(payment="<@111111111>"),
+        directory=FakeDirectory(amtul),
+    )
+    msg = FakeMessage("when do we get paid?", ch.ask, guild)
+    assert run(answerer.handle(msg)) is True
+    assert "flagged" in msg.replies[0] and "contact Amtul" in msg.replies[0]
+    assert len(ch.unanswered.sent) == 1  # staff card
+    assert len(amtul.sent) == 1  # and the routed contact gets a DM
+
+
 def test_a_crash_never_reaches_the_rest_of_the_bot(tmp_path):
-    answerer, guild, ch = make(tmp_path, FakeBrain(error=RuntimeError("boom")))
-    assert run(answerer.handle(FakeMessage("which model?", ch.ask, guild))) is False
+    answerer, guild, ch = make(tmp_path)
+    msg = FakeMessage("which model?", ch.ask, guild)
+
+    async def broken_reply(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    msg.reply = broken_reply
+    assert run(answerer.handle(msg)) is False  # logged, not raised
 
 
 def test_staging_marks_replies(tmp_path):

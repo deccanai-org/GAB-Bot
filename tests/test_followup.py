@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import discord
 
-from gab_faq.brain import Answer
 from gab_faq.config import FollowupSettings, Settings, _platform
+from gab_faq.contracts import Answer
 from gab_faq.discord_answers import FaqAnswerer, build_unanswered_embed
 from gab_faq.followup import DISCORD_LIMIT, build_reminder, card_footer, read_card
 from gab_faq.replies import QuestionLog

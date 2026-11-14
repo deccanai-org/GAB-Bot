@@ -52,25 +52,30 @@ in configured QM channels.
 
 ## Answer engines
 
-- `claude`: Claude selects FAQ IDs from the approved knowledge available to the
-  asker. Needs `ANTHROPIC_API_KEY`; without it the bot does not answer.
-- `search`: embedding and keyword retrieval on the local CPU; no AI and no API key.
+`search` is the only supported engine. Approved FAQ entries are matched with a
+local CPU embedding model and keyword retrieval. Answers are predefined FAQ
+text with their IDs and relevant video links. No external model API is called,
+and no model API key is required. Configuration rejects external engines.
 
-Anthropic is the only AI provider the bot supports.
-
-**AI prose is never published.** The application renders the selected approved
-entries and their IDs. A valid citation cannot be used to attach invented model
-names, numbers, or claims that the bot performed an action. A model can still
-select an irrelevant entry; confidence checks and human handoff remain necessary.
-Invalid AI selections, unavailable services, and timeouts are escalated to a team
-member instead of answering. Keyword-only degraded mode always marks results uncertain.
+Low-confidence or unmatched questions are escalated to the team. Keyword-only
+degraded mode always marks results uncertain. Retrieval can select an irrelevant
+entry; confidence checks and human handoff remain necessary.
 Payment and action requests are routed by code. Contacts come from
 `gab_faq.support.contacts`, independently of AI selection.
 
-The first embedding run downloads the configured model into `models/`; Docker
-preloads it while building. With the `claude` engine, Anthropic receives sanitized
-questions, limited history, and the approved FAQ text available to the asker. Its
-data-handling terms still apply.
+Docker preloads public embedding weights into `models/` at build time. Runtime
+loading uses local files only, with ONNX telemetry disabled. User questions,
+history and FAQ contents are processed within the bot's approved infrastructure.
+Preload the weights before starting a local instance; missing weights cause
+degraded keyword retrieval and escalation, without a model download at runtime.
+
+Per-user FAQ limits in `gab_faq.model_limits` default to 20 questions per rolling
+24 hours and 3 per minute across channels. The local SQLite quota survives
+restarts and is included in backups. Failed attempts count toward the cap;
+greetings and requests routed directly to staff do not. Questions are limited to
+1,500 characters, history to four messages of 400 characters each, and predefined
+answers to 6,000 characters. Longer answers escalate instead of being cut off.
+No external input, reasoning or output tokens are billed.
 
 ## Exports and privacy
 
@@ -113,6 +118,7 @@ keeps it usable and reports the failure instead of confirming success.
 | `output/faq_panel_id.json` | Persistent explorer panel IDs |
 | Optional `BOT_LOG_FILE` | Redacted application logs; production also emits JSON to stdout |
 | `output/faq_state.sqlite3` | Durable tickets and scan cursors |
+| `output/model_usage.sqlite3` | Persistent per-user FAQ quotas; user IDs and timestamps only |
 
 Existing JSON query data is migrated and scrubbed on first startup. Query inserts
 are committed individually; a failed snapshot does not discard committed rows.
@@ -130,14 +136,21 @@ contains title, audience, phase, and update date. Archived or unapproved documen
 and documents containing recognized secrets are excluded. Old phases belong in
 `knowledge/archive/`.
 
+Playground video references live in `knowledge/current/playground-videos.yaml`.
+Each video maps to explicit FAQ IDs. Local search returns the approved written
+solution followed by its relevant video links. Use supplied HTTPS URLs; a missing
+URL displays the recording title and asks the user to get the link from their QM.
+Edits to the catalog reload on the next question. PDF knowledge remains numbered
+text FAQ entries. See [source import status](docs/source-import-status.md) for
+coverage, source precedence, and the mapping of supplied links to archive videos.
+
 ```sh
 python scripts/run_eval.py --engine search
-python scripts/run_eval.py --engine claude
 ```
 
-The evaluation currently contains 67 questions and fails below the configured
+The Phase 6.1 evaluation contains 40 questions and fails below the configured
 pass threshold or on a critical failure. Embedding-dependent unit tests skip
-when the model is not cached. Provider-fake unit tests do not verify live APIs.
+when the model is not cached. No external model inference is supported.
 Current acceptance evidence is recorded under artifacts/; rerun it for each release.
 
 See [docs/architecture.md](docs/architecture.md) for service boundaries,

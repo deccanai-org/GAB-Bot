@@ -13,7 +13,14 @@ from gab_faq.replies import QuestionLog
 from gab_faq.routing import SupportSettings, parse_contacts
 from gab_faq.support import SupportDesk
 
-from .test_discord_answers import ANNOTATORS, GAB_CONFIG, OTHER_PROJECT, FakeChannel
+from .test_discord_answers import (
+    ANNOTATORS,
+    GAB_CONFIG,
+    OTHER_PROJECT,
+    FakeChannel,
+    FakeDirectory,
+    FakeDMUser,
+)
 
 
 class FakeResponse:
@@ -62,7 +69,7 @@ class Clock:
         return self.now
 
 
-def setup(tmp_path, support=None, with_requests_channel=True):
+def setup(tmp_path, support=None, with_requests_channel=True, directory=None):
     channels = {
         "queries": FakeChannel("project-related-queries", 1, ANNOTATORS),
         "other": FakeChannel("project-related-queries", 5, OTHER_PROJECT),
@@ -78,7 +85,9 @@ def setup(tmp_path, support=None, with_requests_channel=True):
         support=support or SupportSettings(),
     )
     clock = Clock()
-    desk = SupportDesk(SimpleNamespace(user=None), settings, QuestionLog(tmp_path), clock=clock)
+    directory = directory or FakeDirectory()
+    bot = SimpleNamespace(user=None, get_user=directory.get_user, fetch_user=directory.fetch_user)
+    desk = SupportDesk(bot, settings, QuestionLog(tmp_path), clock=clock)
     return desk, guild, channels, clock
 
 
@@ -198,22 +207,48 @@ def test_one_request_per_person_per_cooldown(tmp_path):
     assert len(ch["staff"].sent) == 2
 
 
-def test_card_pings_only_the_configured_contact_and_user_text_pings_nobody(tmp_path):
-    contacts = parse_contacts(
-        {"task_qc": {"name": "Amtul / Adiba", "mention": "<@111111111> <@222222222>"}}
+def two_contacts():
+    return replace(
+        SupportSettings(),
+        contacts=parse_contacts(
+            {"task_qc": {"name": "Amtul / Adiba", "mention": "<@111111111> <@222222222>"}}
+        ),
     )
-    desk, guild, ch, _ = setup(tmp_path, support=replace(SupportSettings(), contacts=contacts))
+
+
+def test_contacts_get_a_dm_and_the_card_pings_nobody_and_user_text_pings_nobody(tmp_path):
+    amtul, adiba = FakeDMUser(111111111), FakeDMUser(222222222)
+    desk, guild, ch, _ = setup(
+        tmp_path, support=two_contacts(), directory=FakeDirectory(amtul, adiba)
+    )
     run(
         desk.handle_throttle(
             interaction(guild, ch["queries"]), "@everyone <@999999999> raise it", None, None
         )
     )
-    content, kwargs, fields = card(ch["staff"])
-    assert content == "<@111111111> <@222222222>"
-    allowed = kwargs["allowed_mentions"]
-    assert {o.id for o in allowed.users} == {111111111, 222222222}
-    assert allowed.everyone is False and allowed.roles is False
+    content, kwargs, fields = card(ch["staff"])  # exactly one message: the card, no extra ping
+    assert content is None and kwargs["allowed_mentions"].users is False
     assert "<@999999999>" not in fields["Reason"] and "@everyone" not in fields["Reason"]
+    for person in (amtul, adiba):
+        ((text, dm),) = person.sent
+        assert "throttle increase request" in text and "task queries and QC" in text
+        dm_fields = {f.name: f.value for f in dm["embed"].fields}
+        assert "<@999999999>" not in dm_fields["Reason"] and "@everyone" not in dm_fields["Reason"]
+        assert dm["allowed_mentions"].users is False
+
+
+def test_a_contact_with_closed_dms_is_pinged_in_the_staff_channel_instead(tmp_path):
+    amtul, adiba = FakeDMUser(111111111), FakeDMUser(222222222, closed=True)
+    desk, guild, ch, _ = setup(
+        tmp_path, support=two_contacts(), directory=FakeDirectory(amtul, adiba)
+    )
+    i = interaction(guild, ch["queries"])
+    run(desk.handle_throttle(i, "need more tasks please", None, None))
+    assert len(amtul.sent) == 1 and adiba.sent == []
+    (_card, ping) = ch["staff"].sent
+    assert ping[0] == "<@222222222>"  # only the person who couldn't be messaged
+    assert [o.id for o in ping[1]["allowed_mentions"].users] == [222222222]
+    assert i.followup.sent  # the asker still gets their confirmation
 
 
 def test_no_requests_channel_tells_the_asker_who_to_contact(tmp_path):

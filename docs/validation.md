@@ -1,5 +1,9 @@
 # Local release validation — 2026-11-14
 
+This report records the earlier Phase 5 release candidate. The Phase 6.1 source
+import changes the active knowledge and evaluation set; its evidence is recorded
+separately in [Phase 6.1 validation](phase61-validation.md).
+
 The supported target is one Discord server and one active instance. This is a
 locally validated release candidate. It has not been deployed or tested against
 a live Discord server or external answer provider.

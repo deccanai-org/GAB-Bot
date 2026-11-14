@@ -12,7 +12,7 @@ from pathlib import Path
 from .operations import ProcessOwner
 from .storage import read_json, write_json
 
-DATABASES = ("queries.sqlite3", "faq_state.sqlite3")
+DATABASES = ("queries.sqlite3", "faq_state.sqlite3", "model_usage.sqlite3")
 
 
 def digest(path: Path) -> str:

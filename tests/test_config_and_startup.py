@@ -3,7 +3,6 @@
 import os
 import subprocess
 import sys
-from types import SimpleNamespace
 
 import pytest
 
@@ -15,7 +14,8 @@ from .conftest import ROOT
 def test_repo_config_yaml_has_a_valid_gab_faq_section():
     s = load_settings(ROOT / "config.yaml")
     assert s.environment in ("staging", "production")
-    assert s.model == "claude-opus-5-5"
+    assert s.engine == "search"
+    assert s.search.model == "BAAI/bge-small-en-v1.5"
     assert s.knowledge_dir == ROOT / "knowledge" / "current"
     assert s.knowledge_dir.is_dir()
 
@@ -78,8 +78,9 @@ def test_zero_history_setting_is_preserved(tmp_path):
     assert load_settings(path).max_history_messages == 0
 
 
-def _start_bot(tmp_path, api_key: str) -> subprocess.CompletedProcess:
-    """Load bot.py the way `python bot.py` does, but stop before connecting to Discord."""
+def _start_bot(tmp_path, api_key: str, faq_config=None) -> subprocess.CompletedProcess:
+    """Load bot.py the way `python bot.py` does, but stop before connecting to Discord.
+    `faq_config`: a config.yaml for the FAQ part (default: the project's own config.yaml)."""
     env = {
         **os.environ,
         "PYTHONPATH": str(ROOT),
@@ -87,13 +88,16 @@ def _start_bot(tmp_path, api_key: str) -> subprocess.CompletedProcess:
         "SECRETS_DIR": str(tmp_path / "no-secrets"),
         "DISCORD_TOKEN": "",
     }
+    setup_call = (
+        f"setup_faq_answers(app, {str(faq_config)!r})" if faq_config else ("setup_faq_answers(app)")
+    )
     return subprocess.run(
         [
             sys.executable,
             "-c",
             "import asyncio, logging; logging.basicConfig(level=logging.INFO); "
             "from bot import create_bot; from gab_faq.discord_answers import setup_faq_answers; "
-            "app=create_bot(); app.faq_answers=setup_faq_answers(app); "
+            f"app=create_bot(); app.faq_answers={setup_call}; "
             "print('FAQ_ANSWERER=' + type(app.faq_answers).__name__); asyncio.run(app.close())",
         ],
         cwd=tmp_path,
@@ -105,42 +109,22 @@ def _start_bot(tmp_path, api_key: str) -> subprocess.CompletedProcess:
 
 
 def test_bot_starts_with_free_search_and_no_api_key(tmp_path):
-    result = _start_bot(tmp_path, api_key="")
+    # engine: search is the no-AI mode, so it needs no key. (The project's own config.yaml uses
+    # engine: claude, which does not answer without a key: see the claude tests below.)
+    faq_config = tmp_path / "search-only.yaml"
+    faq_config.write_text("gab_faq:\n  enabled: true\n  engine: search\n")
+    result = _start_bot(tmp_path, api_key="", faq_config=faq_config)
     assert result.returncode == 0, result.stderr
     assert "FAQ_ANSWERER=FaqAnswerer" in result.stdout
     assert "[FAQ] Answering is ON" in result.stderr and "FAQ search" in result.stderr
 
 
-def _settings_with(engine, monkeypatch, api_key):
-    from dataclasses import replace
-
-    from gab_faq import discord_answers
-
-    monkeypatch.setenv("ANTHROPIC_API_KEY", api_key)
-    real = load_settings(ROOT / "config.yaml")
-    monkeypatch.setattr(
-        discord_answers,
-        "load_settings",
-        lambda: replace(real, engine=engine, anthropic_api_key_set=bool(api_key)),
-    )
-    monkeypatch.setattr(discord_answers, "load_environment", lambda: None)
-    return discord_answers
-
-
-def test_claude_engine_without_key_switches_answering_off(monkeypatch):
-    discord_answers = _settings_with("claude", monkeypatch, api_key="")
-    assert discord_answers.setup_faq_answers(SimpleNamespace(user=None)) is None
-
-
-def test_claude_engine_with_key_uses_claude(monkeypatch):
-    from gab_faq.brain import Brain
-
-    discord_answers = _settings_with("claude", monkeypatch, api_key="sk-ant-test-not-real")
-    answerer = discord_answers.setup_faq_answers(SimpleNamespace(user=None))
-    from gab_faq.guard import GuardedEngine
-
-    assert isinstance(answerer.brain, GuardedEngine)  # every engine is wrapped in the guard
-    assert isinstance(answerer.brain.inner, Brain)
+@pytest.mark.parametrize("engine", ["claude", "qwen", "openai"])
+def test_external_model_engines_are_disabled(tmp_path, engine):
+    config = tmp_path / "config.yaml"
+    config.write_text(f"gab_faq:\n  engine: {engine}\n")
+    with pytest.raises(ValueError, match="engine"):
+        load_settings(config)
 
 
 def test_unknown_engine_rejected(tmp_path):

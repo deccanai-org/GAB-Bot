@@ -1,7 +1,7 @@
 """Tools for the FAQ answering part. (The Discord bot itself runs with `python bot.py`.)
 
 python -m gab_faq check   # check config.yaml and the FAQ files load (no API calls, no cost)
-python -m gab_faq chat    # ask the bot questions in your terminal (needs ANTHROPIC_API_KEY)
+python -m gab_faq chat    # local FAQ lookup; no model API key
 python -m gab_faq slack   # run the Slack bot (needs SLACK_BOT_TOKEN and SLACK_APP_TOKEN too)
 """
 
@@ -40,6 +40,7 @@ def chat(brain, environment: str) -> None:
             {"role": "user", "content": question},
             {"role": "assistant", "content": answer.text},
         ]
+        history = history[-4:]
 
 
 def check(settings, knowledge: KnowledgeBase) -> int:
@@ -68,13 +69,8 @@ def check(settings, knowledge: KnowledgeBase) -> int:
         f"Slack answer channels: {', '.join(sorted(s.answer_channels)) or 'none (only @mentions)'}"
     )
     print("Secrets set (values not shown):")
-    print(f"  ANTHROPIC_API_KEY: {settings.anthropic_api_key_set}")
     print(f"  DISCORD_TOKEN:     {bool(settings.discord_token)}")
     print(f"  SLACK tokens:      {bool(settings.slack_bot_token and settings.slack_app_token)}")
-    if settings.enabled and settings.engine == "claude" and not settings.anthropic_api_key_set:
-        print(
-            "WARNING: engine is claude but ANTHROPIC_API_KEY is missing, so the bot won't answer."
-        )
     return 0
 
 
@@ -90,10 +86,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "check":
         return check(settings, knowledge)
 
-    if settings.engine == "claude" and not settings.anthropic_api_key_set:
-        raise SystemExit(
-            "engine is claude but ANTHROPIC_API_KEY is not set. Add it to .env, or use engine: search."
-        )
     brain = build_engine(settings, knowledge)
     if args.command == "chat":
         chat(brain, settings.environment)

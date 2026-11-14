@@ -4,8 +4,8 @@ to either."""
 import json
 
 from gab_faq import discord_answers, slack_app
-from gab_faq.brain import Answer
 from gab_faq.config import PlatformSettings, _platform
+from gab_faq.contracts import Answer
 from gab_faq.replies import QuestionLog, format_reply, split_message
 
 BOT = "UBOT"

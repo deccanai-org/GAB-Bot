@@ -20,6 +20,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from .config import Settings
 from .contracts import AnswerEngine
+from .model_limits import answer_as_user
 from .redact import redact_secrets
 from .replies import QuestionLog, format_reply
 from .routing import classify, hint_for
@@ -90,7 +91,9 @@ def to_history(
 
 def build_app(settings: Settings, brain: AnswerEngine, question_log: QuestionLog) -> App:
     app = App(token=settings.slack_bot_token)
-    bot_user_id = app.client.auth_test()["user_id"]
+    auth = app.client.auth_test()
+    bot_user_id = auth["user_id"]
+    workspace_id = auth.get("team_id", "workspace")
     log.info("Slack bot connected as user %s", bot_user_id)
 
     def thread_messages(client, channel: str, thread_ts: str) -> list[dict]:
@@ -132,7 +135,9 @@ def build_app(settings: Settings, brain: AnswerEngine, question_log: QuestionLog
             pass  # reactions are a nicety; never fail the answer because of them
 
         role = settings.slack.role_for_channel(channel)
-        answer = brain.answer(question, role=role, history=history)
+        answer = answer_as_user(
+            brain, f"slack:{workspace_id}:{event['user']}", question, role, history
+        )
         if answer.needs_escalation and not answer.route:  # routing is always decided by code
             answer.route = classify(question, settings.support)
             answer.route_hint = hint_for(question)
