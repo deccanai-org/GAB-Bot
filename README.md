@@ -52,10 +52,19 @@ in configured QM channels.
 
 ## Answer engines
 
-`search` is the only supported engine. Approved FAQ entries are matched with a
-local CPU embedding model and keyword retrieval. Answers are predefined FAQ
-text with their IDs and relevant video links. No external model API is called,
-and no model API key is required. Configuration rejects external engines.
+`qwen` is the configured engine: Qwen3-Omni-Flash through Alibaba Cloud Model
+Studio's Singapore API. Set `DASHSCOPE_API_KEY` in ignored `.env` or deployment
+secrets. Only sanitized questions, up to four short history messages and selected
+approved FAQ excerpts are sent to that endpoint. This transfer was explicitly
+authorized. Do not put the key in Git, questions, logs or chat messages.
+
+Qwen selects up to three FAQ IDs. Its generated prose is never published; the
+bot renders approved FAQ text and supplied video links. Invalid selections,
+unavailable services and unknown answers escalate to the team. No automatic
+retries, redirects or alternate-provider calls are used.
+
+Set `engine: search` for local CPU embedding and keyword retrieval without a model
+API key or external inference. Claude is not supported.
 
 Low-confidence or unmatched questions are escalated to the team. Keyword-only
 degraded mode always marks results uncertain. Retrieval can select an irrelevant
@@ -63,11 +72,9 @@ entry; confidence checks and human handoff remain necessary.
 Payment and action requests are routed by code. Contacts come from
 `gab_faq.support.contacts`, independently of AI selection.
 
-Docker preloads public embedding weights into `models/` at build time. Runtime
-loading uses local files only, with ONNX telemetry disabled. User questions,
-history and FAQ contents are processed within the bot's approved infrastructure.
-Preload the weights before starting a local instance; missing weights cause
-degraded keyword retrieval and escalation, without a model download at runtime.
+Docker preloads public embedding weights for the optional local search engine.
+Runtime weights are loaded locally, with ONNX telemetry disabled. Qwen context
+selection uses local keywords before the bounded request is sent to Alibaba.
 
 Per-user FAQ limits in `gab_faq.model_limits` default to 20 questions per rolling
 24 hours and 3 per minute across channels. The local SQLite quota survives
@@ -75,7 +82,11 @@ restarts and is included in backups. Failed attempts count toward the cap;
 greetings and requests routed directly to staff do not. Questions are limited to
 1,500 characters, history to four messages of 400 characters each, and predefined
 answers to 6,000 characters. Longer answers escalate instead of being cut off.
-No external input, reasoning or output tokens are billed.
+Qwen requests have an 8,000-byte serialized UTF-8 cap, including question, history,
+FAQ excerpts and request options. This is a byte limit, not a tokenizer count.
+Model output is capped at 256 tokens, thinking is disabled, and only text mode is
+requested. The longer predefined FAQ reply is rendered locally. Provider errors
+consume an attempt so retries cannot bypass the per-user cap.
 
 ## Exports and privacy
 
@@ -150,7 +161,8 @@ python scripts/run_eval.py --engine search
 
 The Phase 6.1 evaluation contains 40 questions and fails below the configured
 pass threshold or on a critical failure. Embedding-dependent unit tests skip
-when the model is not cached. No external model inference is supported.
+when the local model is not cached. Qwen HTTP/protocol tests use mocked responses;
+they do not establish live key access or provider answer quality.
 Current acceptance evidence is recorded under artifacts/; rerun it for each release.
 
 See [docs/architecture.md](docs/architecture.md) for service boundaries,

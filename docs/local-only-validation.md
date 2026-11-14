@@ -1,5 +1,9 @@
 # Local-only FAQ answering and usage limits
 
+This report describes commit `aff7135` and the optional `engine: search` mode.
+The user subsequently explicitly authorized the Qwen Singapore transfer. Current
+provider configuration and checks are in [Qwen validation](qwen-validation.md).
+
 External model providers are disabled by explicit user instruction. The external
 provider implementation was removed; settings reject external engines. Only
 approved predefined FAQ answers and video links are returned. The local embedding

@@ -18,6 +18,7 @@ The OS-backed owner lock prevents two local processes using the same output dire
 | `grounding.py` | Shared source-selection instructions and deterministic source rendering |
 | `tutorials.py` | Approved playground links mapped to FAQ IDs, shared by both answer engines |
 | `model_limits.py` | Durable per-user question quotas and adapter-bound user identity |
+| `model_context.py`, `qwen.py` | Bounded approved context and Qwen3-Omni-Flash selection at the authorized Singapore endpoint |
 | `guard.py`, `routing.py`, `redact.py` | Input/output guards, configured contacts, text privacy |
 | `discord_common.py` | Mention allowlists, channel keys, readable sources, guild-local destinations |
 | `discord_answers.py`, `followup.py` | FAQ replies, explicit delivery results, cards and reminders |
@@ -68,11 +69,18 @@ but cannot make Discord and SQLite a single atomic transaction.
 
 ## Answer trust
 
-External model providers are disabled. Only local CPU embeddings and keywords
-select FAQ entries. The application renders the approved text and supplied video
-links, with audience filtering before retrieval. Low-confidence or absent matches
-escalate to humans. No questions, history or FAQ excerpts go to a model service.
-Runtime weights are loaded from local files, and ONNX telemetry is disabled.
+The configured Qwen engine sends sanitized questions, at most four short history
+messages and selected approved FAQ entries to Alibaba's Singapore API with the
+user's explicit authorization. The endpoint and model are fixed in the adapter.
+No raw PDFs, MP4s, attachments, tools or audio are sent. API credentials are used
+only in the authorization header. The application publishes only approved text
+for IDs present in the actual request, plus the stored video links; model prose
+is discarded. Invalid or incomplete selections escalate without another call.
+
+The request is capped at 8,000 serialized UTF-8 bytes, model output at 256 tokens,
+and thinking is disabled. Per-user reservations happen before provider access.
+The optional search engine remains entirely local, with local-file loading and
+ONNX telemetry disabled. There is no automatic external-provider fallback.
 
 Keyword-only fallback always marks a retrieved answer uncertain and escalates it.
 It does not reuse semantic-search confidence thresholds as evidence of certainty.

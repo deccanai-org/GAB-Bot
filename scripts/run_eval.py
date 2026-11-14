@@ -58,7 +58,12 @@ def main() -> int:
     parser.add_argument("--cases", default=str(ROOT / "tests" / "eval" / "questions.yaml"))
     parser.add_argument("--min-pass", type=float, default=0.9)
     parser.add_argument("--report", default=str(ROOT / "eval-report.json"))
-    parser.add_argument("--engine", choices=["search"], help="local FAQ retrieval only")
+    parser.add_argument(
+        "--engine",
+        choices=["search"],
+        default="search",
+        help="local FAQ retrieval only; never makes paid provider calls",
+    )
     args = parser.parse_args()
 
     load_environment()

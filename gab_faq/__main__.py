@@ -1,7 +1,7 @@
 """Tools for the FAQ answering part. (The Discord bot itself runs with `python bot.py`.)
 
 python -m gab_faq check   # check config.yaml and the FAQ files load (no API calls, no cost)
-python -m gab_faq chat    # local FAQ lookup; no model API key
+python -m gab_faq chat    # Qwen needs DASHSCOPE_API_KEY; search is local
 python -m gab_faq slack   # run the Slack bot (needs SLACK_BOT_TOKEN and SLACK_APP_TOKEN too)
 """
 
@@ -69,6 +69,7 @@ def check(settings, knowledge: KnowledgeBase) -> int:
         f"Slack answer channels: {', '.join(sorted(s.answer_channels)) or 'none (only @mentions)'}"
     )
     print("Secrets set (values not shown):")
+    print(f"  DASHSCOPE_API_KEY: {settings.dashscope_api_key_set}")
     print(f"  DISCORD_TOKEN:     {bool(settings.discord_token)}")
     print(f"  SLACK tokens:      {bool(settings.slack_bot_token and settings.slack_app_token)}")
     return 0
@@ -86,6 +87,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "check":
         return check(settings, knowledge)
 
+    if settings.engine == "qwen" and not settings.dashscope_api_key_set:
+        raise SystemExit("Qwen requires DASHSCOPE_API_KEY in .env or deployment secrets.")
     brain = build_engine(settings, knowledge)
     if args.command == "chat":
         chat(brain, settings.environment)

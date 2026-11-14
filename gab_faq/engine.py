@@ -1,4 +1,4 @@
-"""Build the local FAQ engine. External model providers are disabled."""
+"""Build guarded local retrieval or the explicitly selected Alibaba Qwen engine."""
 
 from __future__ import annotations
 
@@ -23,12 +23,22 @@ def build_engine(settings: Settings, knowledge: KnowledgeBase):
 
 
 def _build_inner(settings: Settings, knowledge: KnowledgeBase):
+    if settings.engine == "qwen":
+        from .qwen import Qwen
+
+        return Qwen(
+            knowledge,
+            limits=settings.model_limits,
+            max_history_messages=settings.max_history_messages,
+        )
     if settings.engine != "search":
-        raise ValueError("External model providers are disabled; engine must be search")
+        raise ValueError("Unsupported answer engine")
     from .search import FaqSearch
 
     return FaqSearch(knowledge, settings.search)
 
 
 def describe(settings: Settings) -> str:
+    if settings.engine == "qwen":
+        return "Alibaba Qwen3-Omni-Flash (Singapore, text only)"
     return f"Local FAQ search ({settings.search.model})"

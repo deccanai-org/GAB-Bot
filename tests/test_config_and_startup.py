@@ -14,7 +14,7 @@ from .conftest import ROOT
 def test_repo_config_yaml_has_a_valid_gab_faq_section():
     s = load_settings(ROOT / "config.yaml")
     assert s.environment in ("staging", "production")
-    assert s.engine == "search"
+    assert s.engine == "qwen"
     assert s.search.model == "BAAI/bge-small-en-v1.5"
     assert s.knowledge_dir == ROOT / "knowledge" / "current"
     assert s.knowledge_dir.is_dir()
@@ -109,8 +109,7 @@ def _start_bot(tmp_path, api_key: str, faq_config=None) -> subprocess.CompletedP
 
 
 def test_bot_starts_with_free_search_and_no_api_key(tmp_path):
-    # engine: search is the no-AI mode, so it needs no key. (The project's own config.yaml uses
-    # engine: claude, which does not answer without a key: see the claude tests below.)
+    # Explicit local search needs no model API key.
     faq_config = tmp_path / "search-only.yaml"
     faq_config.write_text("gab_faq:\n  enabled: true\n  engine: search\n")
     result = _start_bot(tmp_path, api_key="", faq_config=faq_config)
@@ -119,7 +118,7 @@ def test_bot_starts_with_free_search_and_no_api_key(tmp_path):
     assert "[FAQ] Answering is ON" in result.stderr and "FAQ search" in result.stderr
 
 
-@pytest.mark.parametrize("engine", ["claude", "qwen", "openai"])
+@pytest.mark.parametrize("engine", ["claude", "openai"])
 def test_external_model_engines_are_disabled(tmp_path, engine):
     config = tmp_path / "config.yaml"
     config.write_text(f"gab_faq:\n  engine: {engine}\n")

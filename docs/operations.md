@@ -61,7 +61,8 @@ Keep GAB_ENVIRONMENT=staging during the pilot. Verify:
 Production readiness additionally validates one guild, resolved answer/staff
 channels, required bot permissions, a staff destination hidden from the default
 role, synchronized commands, writable query/ticket state, and an initialized FAQ
-engine with real embeddings. Review all other roles allowed into staff channels;
+engine with its required Alibaba key or, in search mode, real local embeddings.
+Review all other roles allowed into staff channels;
 checking the default role alone cannot prove every role assignment is private.
 
 ## Deploy and roll back
@@ -72,6 +73,8 @@ checking the default role alone cannot prove every role assignment is private.
    Confirm the volume is writable by UID/GID 10001 and supports SQLite locking.
 3. Create/update the existing Kubernetes secret through the organization's secret
    manager. Keep tokens out of source, image build arguments, and shell history.
+   Qwen requires `DASHSCOPE_API_KEY` with access to Qwen3-Omni-Flash in Singapore.
+   The old `ANTHROPIC_API_KEY` is unused and is never reused for Alibaba.
 4. Publish the tested image to the existing registry and obtain its registry digest.
 5. Render the actual manifest, replacing the intentionally unusable template tag:
 
@@ -114,8 +117,9 @@ termination grace period is the final process boundary.
 For gateway outages, inspect connectivity and permissions before restarting. For
 storage errors, stop rollout, inspect free space/mount health, and retain the PVC.
 For FAQ quota exhaustion, the bot sends a local limit reply without another
-lookup or staff-card flood. Missing embedding weights use uncertain keyword
-retrieval, never an external model fallback. Keep quota state on the output PVC
+lookup or staff-card flood. Qwen errors escalate without retries or provider
+fallback. Missing embedding weights in explicit search mode use uncertain keyword
+retrieval. Keep quota state on the output PVC
 and include it in backup/restore. Do not increase workers before measuring load.
 
 ## Backups, restore, and retention

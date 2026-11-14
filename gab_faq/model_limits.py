@@ -17,6 +17,8 @@ USER_KEY = contextvars.ContextVar("faq_model_user", default="local")
 class ModelLimits:
     questions_per_day: int = 20
     questions_per_minute: int = 3
+    max_prompt_bytes: int = 8000
+    max_output_tokens: int = 256
     max_answer_chars: int = 6000
     max_question_chars: int = 1500
     max_history_message_chars: int = 400
@@ -26,6 +28,10 @@ class ModelLimits:
             value = getattr(self, item.name)
             if not isinstance(value, int) or isinstance(value, bool) or value < 1:
                 raise ValueError(f"model_limits.{item.name} must be a positive integer")
+        if not 4000 <= self.max_prompt_bytes <= 64000:
+            raise ValueError("max_prompt_bytes must be between 4000 and 64000")
+        if not 64 <= self.max_output_tokens <= 1024:
+            raise ValueError("max_output_tokens must be between 64 and 1024")
 
     @classmethod
     def parse(cls, values=None):

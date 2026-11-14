@@ -15,7 +15,7 @@ from gab_faq.search import FaqSearch
 
 
 def test_real_faq_lookup_runs_with_network_disabled(tmp_path, monkeypatch):
-    settings = replace(load_settings(), log_dir=tmp_path)
+    settings = replace(load_settings(), engine="search", log_dir=tmp_path)
     if not any(settings.search.cache_dir.glob("**/*.onnx")):
         pytest.skip("local embedding weights not cached")
 

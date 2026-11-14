@@ -125,7 +125,7 @@ def _platform(section: dict | None) -> PlatformSettings:
     )
 
 
-ENGINES = ("search",)
+ENGINES = ("search", "qwen")
 
 
 @dataclass(frozen=True)
@@ -217,7 +217,7 @@ def _support(section: dict | None) -> SupportSettings:
 class Settings:
     runtime: RuntimeSettings = field(default_factory=RuntimeSettings)
     enabled: bool = False
-    # Only local FAQ retrieval is allowed; no external inference API.
+    # Qwen is used only when explicitly selected; local search is also available.
     engine: str = "search"
     search: SearchSettings = field(default_factory=SearchSettings)
     followup: FollowupSettings = field(default_factory=FollowupSettings)
@@ -234,10 +234,11 @@ class Settings:
     discord_token: str = field(default="", repr=False)
     slack_bot_token: str = field(default="", repr=False)
     slack_app_token: str = field(default="", repr=False)
+    dashscope_api_key_set: bool = field(default=False, repr=False)
 
     def __post_init__(self):
         if self.engine not in ENGINES:
-            raise ValueError("External model providers are disabled; engine must be search")
+            raise ValueError(f"engine must be one of {ENGINES}")
         if not 0 <= self.max_history_messages <= 50:
             raise ValueError("max_history_messages must be between 0 and 50")
 
@@ -277,4 +278,5 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         discord_token=os.environ.get("DISCORD_TOKEN", ""),
         slack_bot_token=os.environ.get("SLACK_BOT_TOKEN", ""),
         slack_app_token=os.environ.get("SLACK_APP_TOKEN", ""),
+        dashscope_api_key_set=bool(os.environ.get("DASHSCOPE_API_KEY", "").strip()),
     )

@@ -416,6 +416,11 @@ def _setup(bot: discord.Client, config_path=None) -> FaqAnswerer | None:
     if not settings.enabled:
         log.info("[FAQ] Answering is OFF (gab_faq.enabled is false in config.yaml)")
         return None
+    if settings.engine == "qwen" and not settings.dashscope_api_key_set:
+        log.warning(
+            "[FAQ] Answering is OFF: Qwen requires DASHSCOPE_API_KEY; no provider fallback is used"
+        )
+        return None
     knowledge = KnowledgeBase(settings.knowledge_dir)
     brain = build_engine(settings, knowledge)
     question_log = QuestionLog(settings.log_dir, environment=settings.environment)
