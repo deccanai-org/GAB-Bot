@@ -10,7 +10,7 @@ from weakref import WeakValueDictionary
 import discord
 
 from .config import Settings, load_environment, load_settings
-from .contracts import Answer
+from .contracts import HELPFUL_OUTCOMES, Answer
 from .discord_common import (
     allowed_mentions,
     channel_keys,
@@ -217,11 +217,12 @@ class FaqAnswerer:
         )
         chunks = split_message(text, DISCORD_LIMIT)
         for i, chunk in enumerate(chunks):
-            # A confident answer gets a "Didn't help? Ask a person" button under its last part.
+            # An answer (FAQ or general guidance) gets a "Didn't help? Ask a person" button under
+            # its last part.
             extra = (
                 {"view": self.followup.reply_view()}
                 if (
-                    (answer.outcome == "answered" or delivery_failed)
+                    (answer.outcome in HELPFUL_OUTCOMES or delivery_failed)
                     and i == len(chunks) - 1
                     and message.guild is not None
                 )

@@ -10,10 +10,17 @@ import re
 
 from .contracts import Answer
 from .conversation import normalize_history
-from .model_limits import USER_KEY, ModelLimits, ModelQuota, QuotaExceeded
+from .model_limits import PROVIDER_BUSY, USER_KEY, ModelLimits, ModelQuota, QuotaExceeded
+from .policy import (
+    INSTRUCTION_REPLY,
+    LIVE_TASK_REPLY,
+    is_instruction_override,
+    is_live_task_help,
+    is_payment_matter,
+)
 from .redact import clean_untrusted, redact_secrets, scrub_mentions
-from .routing import SupportSettings, classify, contact_names, hint_for
-from .search import NOT_FOUND, PAYMENT_REPLY, is_payment_question
+from .routing import SupportSettings, contact_names, hint_for, resolve_route
+from .search import NOT_FOUND, PAYMENT_REPLY
 
 log = logging.getLogger(__name__)
 
@@ -31,8 +38,10 @@ ACTIONS = (
     (
         "payment_action",
         re.compile(
-            r"\b(pay|release|process|transfer|send|approve|clear)\b.{0,30}\b(me|my|payment|payments|money|salary"
-            r"|invoice|payout|dues)\b",
+            # A money word is required: "send me the staff IDs" (seen live) is not a payment.
+            r"\bpay\s+(me|my|us|our)\b"
+            r"|\b(pay|release|process|transfer|send|approve|clear)\b.{0,30}\b(payment|payments|money"
+            r"|salary|invoice|payout|dues)\b",
             re.IGNORECASE,
         ),
     ),
@@ -143,6 +152,11 @@ class GuardedEngine:
                 via="guard: question limit",
             )
 
+        if is_instruction_override(q):
+            # Content, not instructions: refused locally, no model call, no staff hand-off.
+            log.warning("[FAQ] instruction-override attempt refused locally")
+            return Answer(INSTRUCTION_REPLY, "declined", via="guard: instruction override")
+
         action = detect_action(q)
         if action:
             route = {
@@ -159,7 +173,7 @@ class GuardedEngine:
                 route=route,
                 route_hint=hint_for(q),
             )
-        if is_payment_question(q):
+        if is_payment_matter(q):
             return Answer(
                 PAYMENT_REPLY,
                 "needs_human",
@@ -167,6 +181,8 @@ class GuardedEngine:
                 via="guard: payment",
                 route="payment",
             )
+        if is_live_task_help(q):
+            return Answer(LIVE_TASK_REPLY, "declined", via="guard: live task help")
 
         if self.quota is not None:
             from .search import GREETING_REPLY, THANKS_REPLY, THANKS_WORDS, WORD_RE, is_small_talk
@@ -179,7 +195,7 @@ class GuardedEngine:
                 )
                 return Answer(text, "small_talk", via="guard: local greeting")
             try:
-                self.quota.reserve(USER_KEY.get())
+                reservation = self.quota.reserve(USER_KEY.get())
             except QuotaExceeded as error:
                 return Answer(str(error), "limited", via="guard: model quota")
             except Exception:
@@ -193,6 +209,12 @@ class GuardedEngine:
         for message in recent:
             message["content"] = message["content"][: self.limits.max_history_message_chars]
         answer = self.inner.answer(q, role, recent)
+        if answer.via == PROVIDER_BUSY and self.quota is not None:
+            # Nothing was sent to the provider, so the question should not use up the user's allowance.
+            try:
+                self.quota.refund(USER_KEY.get(), reservation)
+            except Exception:
+                log.exception("Could not refund a model quota reservation")
         if len(answer.text) > self.limits.max_answer_chars:
             answer = Answer(
                 "This FAQ answer is too long to post here. A team member can help with the full guidance.",
@@ -215,8 +237,10 @@ class GuardedEngine:
             answer.escalation_reason = answer.escalation_reason or "reply removed by the guard"
         answer.text = text
         if answer.needs_escalation:
-            answer.route = classify(question, self.support)  # always code, whatever the engine said
-            answer.route_hint = hint_for(question)
+            # Always code: the classifier decides, a model suggestion is only a validated fallback.
+            answer.route, answer.route_hint = resolve_route(
+                question, self.support, answer.suggested_route
+            )
         else:
             answer.route = answer.route_hint = ""
         return answer

@@ -122,6 +122,31 @@ fallback. Missing embedding weights in explicit search mode use uncertain keywor
 retrieval. Keep quota state on the output PVC
 and include it in backup/restore. Do not increase workers before measuring load.
 
+### Provider capacity for 700 freelancers
+
+Planning figures, measured or taken from Alibaba's model page on 15 Nov 2026:
+
+| Item | Value |
+| --- | --- |
+| Demand | 700 freelancers x 20 questions = at most 14,000 provider requests a day (about 10 a minute if spread over 24 hours, about 23 over a 10-hour day; bursts are higher) |
+| Alibaba account limit, qwen3-omni-flash, Singapore | 60 requests and 100,000 tokens a minute, shared by every key in the account |
+| One request (measured live) | about 1,650 input and 11 output tokens, so the token and request limits both bind at about 60 a minute |
+| Latency (measured live) | about 0.7 s a request, so 4 workers can send far more than 60 a minute: Alibaba's limit, not the bot, is the ceiling |
+| Cost ceiling | 14,000 x 1,650 tokens at the printed USD 0.43 per million input and 1.66 per million output is about USD 10 a day if everyone uses their full allowance |
+
+The bot keeps its own whole-bot cap, `model_limits.provider_requests_per_minute`
+(50). Past it a question waits up to 10 seconds for a slot, then receives a "busy,
+ask again in about a minute" reply. That reply is not an escalation, sends nothing
+to Alibaba, and is refunded from the user's 20-a-day allowance. Without the cap, a
+burst above Alibaba's limit would be rejected, and every rejected question would
+become a staff card and DMs. A request that Alibaba rejects anyway (for example
+because other applications share the account) still escalates, as before.
+
+If the freelancers will ask in bursts (for example at onboarding), ask Alibaba to
+raise the account limit first, then raise `provider_requests_per_minute` to stay
+below the new limit. Watch the log line "Qwen request turned away: provider
+request cap reached"; frequent occurrences mean the cap is the bottleneck.
+
 ## Backups, restore, and retention
 
 ```sh

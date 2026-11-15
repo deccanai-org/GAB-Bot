@@ -1,10 +1,10 @@
 # Supplied links only. Null URLs preserve archive items without guessed links.
 source_archive: Playgrounds-20261114T165201Z-1-001.zip
-updated: '2026-11-14'
+updated: '2026-11-15'
 videos:
 - id: playground-01
   title: Production - Introduction to Production Tasking
-  url: null
+  url: https://drive.google.com/file/d/1RwZ0fHpKIYTPypRYoGQ0lql-BIErqKq9/view
   faq_ids:
   - PG1
   - IN6
@@ -19,6 +19,7 @@ videos:
   faq_ids:
   - PG2
   - IN8
+  - A16
   - IN9
   - IN10
   - IN11
@@ -31,7 +32,7 @@ videos:
   - Playgrounds/3B Annotation /1. Introduction and Account Setup.mp4
 - id: playground-03
   title: 3B - Creating Natural Conversations
-  url: null
+  url: https://drive.google.com/file/d/1J9vY8ZYjCNy_qSmQ10wpRHOeiMUTnXP7/view
   faq_ids:
   - PG3
   - IN23
@@ -60,6 +61,10 @@ videos:
   - IN34
   - IN35
   - IN36
+  - IN31b
+  - IN34b
+  - IN35b
+  - A17
   - A7
   - Q3
   - Q14
@@ -124,9 +129,12 @@ videos:
   - Playgrounds/Pre assessment latest playgrounds/4. Evaluating the Conversation.mp4
 - id: playground-08
   title: Production - Final preference and justifications
-  url: null
+  url: https://drive.google.com/file/d/1pR4mn8JXE3rLdQP1YqRJIL2C10TL3VxK/view
   faq_ids:
   - PG8
+  - EV13
+  - EV14
+  - EV15
   sha256: 8355349bce669ccd52292119eba56abc1fa92d6fe0ac7599fab5142f94442e4f
   size_bytes: 13230831
   archive_paths:

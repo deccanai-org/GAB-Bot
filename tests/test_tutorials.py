@@ -124,7 +124,8 @@ def test_archive_inventory_has_no_unmapped_or_duplicate_paths():
     videos = catalog["videos"]
     archive_videos = [video for video in videos if "archive_paths" in video]
     assert len(archive_videos) == 11
-    assert len([video for video in videos if video.get("url")]) == 10
+    # All 13 videos have a supplied link (the last three were added from the shared Playgrounds folder).
+    assert len([video for video in videos if video.get("url")]) == 13
     paths = [path for video in archive_videos for path in video["archive_paths"]]
     assert len(paths) == 21 and len(set(paths)) == 21
     assert len({video["sha256"] for video in archive_videos}) == 11

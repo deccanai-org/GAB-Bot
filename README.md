@@ -3,7 +3,7 @@
 The bot collects query-shaped messages, categorizes and exports them, moderates
 configured content, answers from approved project FAQs, and routes support
 requests to the team. Discord runs with `python bot.py`; Slack runs with
-`python -m gab_faq slack`.
+`gigi slack` (or `python -m gab_faq slack`).
 
 ## Local setup
 
@@ -22,13 +22,23 @@ are read from environment variables or files in `/app/secrets/`. Values already
 present in the environment take precedence.
 
 ```sh
-python -m gab_faq check
+python -m pip install -e . --no-deps   # installs the `gigi` command (editable, reads this checkout)
+gigi check                             # config, FAQ files, Qwen readiness; no API calls
+gigi ping                              # one live Qwen request: key, endpoint, TLS, reply validation
+gigi ask "How do I reset before Product B?" --role annotator [--json] [--fresh-quota]
+gigi chat --role qc                    # interactive; earlier turns are thread context
 python -m pytest -q
 python -m ruff check .
 python -m ruff format --check .
-python -m gab_faq chat
 python bot.py
 ```
+
+`gigi` is the same as `python -m gab_faq`. Questions take exactly the Discord path (guard,
+per-user quota, retrieval, Qwen, code-owned routing); the CLI's quota user is `cli:<you>`, and
+`--fresh-quota` uses a throwaway quota store for testing. Secrets pasted with surrounding angle
+brackets (`<sk-...>`) are unwrapped with a warning; store them without the brackets.
+`scripts/live_probe.py` runs a JSON list of synthetic test questions through live Qwen and
+records replies, routing, requests and tokens.
 
 The Discord application needs Message Content Intent and the permissions used by
 its enabled features: View Channels, Read Message History, Send Messages, Embed
@@ -55,15 +65,32 @@ in configured QM channels.
 Qwen3-Omni-Flash is the bot's default LLM, including when the engine setting is
 omitted. The configuration explicitly selects `engine: qwen` and
 `model: qwen3-omni-flash` through Alibaba Cloud Model Studio's Singapore API.
-Set `DASHSCOPE_API_KEY` in ignored `.env` or deployment
-secrets. Only sanitized questions, up to four short history messages and selected
-approved FAQ excerpts are sent to that endpoint. This transfer was explicitly
-authorized. Do not put the key in Git, questions, logs or chat messages.
+Set `DASHSCOPE_API_KEY` in ignored `.env` or deployment secrets. Do not put the
+key in Git, questions, logs or chat messages.
 
-Qwen selects up to three FAQ IDs. Its generated prose is never published; the
-bot renders approved FAQ text and supplied video links. Invalid selections,
-unavailable services and unknown answers escalate to the team. No automatic
-retries, redirects or alternate-provider calls are used.
+**Qwen is on for questions** (`external_questions_approved: true`, approved by the
+project owner on 15 November 2026); earlier thread messages are not sent
+(`external_history_approved: false`). Setting `external_questions_approved: false`
+turns Qwen off: the bot then answers clear FAQ matches, clarifications, greetings
+and unrelated questions locally and hands other GAB questions to a person. The exact
+fields sent are listed in [docs/outbound-payload.md](docs/outbound-payload.md).
+
+Qwen can explain and combine retrieved FAQ entries (every cited entry
+needs an exact quote; required exceptions are appended verbatim), give general
+guidance labelled as not an official GAB requirement, ask a clarification, or hand
+the question to a person. Links, staff and routing are always added by code. See
+[docs/answer-flow.md](docs/answer-flow.md) for every answer type and its checks.
+`gab_faq.local_backstop` is retained only for configuration compatibility and has
+no effect on the Qwen engine.
+
+Alibaba limits the whole account to 60 requests a minute. The bot keeps its own cap
+(`model_limits.provider_requests_per_minute`, 50); a question past it gets a "busy,
+ask again in a minute" reply with no staff card and no use of the user's daily
+allowance. See "Provider capacity" in [docs/operations.md](docs/operations.md).
+
+`python scripts/run_live_eval.py --yes` measures real answer quality against
+`tests/eval/paraphrases.yaml`. It sends FAQ text to Alibaba and costs money, so it
+is never part of the routine `run_eval.py` check.
 
 Set `engine: search` explicitly for local CPU embedding and keyword retrieval
 without a model API key or external inference. The `search.model` setting names

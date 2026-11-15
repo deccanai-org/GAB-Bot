@@ -13,6 +13,7 @@ Secrets are never written in code or in config.yaml.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -46,11 +47,32 @@ def load_secret_files(directory: Path) -> list[str]:
     return loaded
 
 
+SECRET_NAMES = ("DISCORD_TOKEN", "DASHSCOPE_API_KEY", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN")
+
+
+def normalize_secrets() -> list[str]:
+    """Remove one pair of angle brackets around a secret ("<sk-...>"), a common paste mistake
+    from "KEY=<your key>" templates that makes every provider call fail with 401. Returns the
+    names fixed (never the values); a warning asks for the stored value to be corrected."""
+    fixed = []
+    for name in SECRET_NAMES:
+        value = os.environ.get(name, "").strip()
+        inner = value[1:-1].strip()
+        if len(value) > 2 and value[0] == "<" and value[-1] == ">" and not set("<>") & set(inner):
+            os.environ[name] = inner
+            fixed.append(name)
+            logging.getLogger(__name__).warning(
+                "%s was wrapped in <...>; the brackets were removed. Store it without them.", name
+            )
+    return fixed
+
+
 def load_environment() -> None:
     """Read .env (on a laptop) and /app/secrets/ (in Kubernetes). bot.py does this too; running it
     twice is harmless because neither overwrites a variable that is already set."""
     load_dotenv(PROJECT_ROOT / ".env", override=False)
     load_secret_files(Path(os.environ.get("SECRETS_DIR", SECRETS_DIR)))
+    normalize_secrets()
 
 
 def _names(values) -> frozenset[str]:
@@ -223,6 +245,12 @@ class Settings:
     engine: str = "qwen"
     model: str = QWEN_MODEL
     search: SearchSettings = field(default_factory=SearchSettings)
+    # With engine qwen: when Qwen says "not in the FAQ" or fails, post a CONFIDENT local search
+    # match instead of escalating. Needs the embedding model (bundled in the image).
+    local_backstop: bool = True
+    external_questions_approved: bool = False
+    external_history_approved: bool = False
+    provider_usage_path: Path = PROJECT_ROOT / "output" / "provider_usage.sqlite3"
     followup: FollowupSettings = field(default_factory=FollowupSettings)
     # Contacts, /throttle-request and /task-issue (routing.py, support.py).
     support: SupportSettings = field(default_factory=SupportSettings)
@@ -272,6 +300,14 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         engine=engine,
         model=str(faq.get("model", QWEN_MODEL)).strip().lower(),
         search=_search(faq.get("search")),
+        local_backstop=bool(faq.get("local_backstop", True)),
+        external_questions_approved=faq.get("external_questions_approved") is True,
+        external_history_approved=faq.get("external_history_approved") is True,
+        provider_usage_path=Path(
+            os.environ.get("GAB_PROVIDER_USAGE_PATH")
+            or faq.get("provider_usage_path")
+            or PROJECT_ROOT / "output" / "provider_usage.sqlite3"
+        ),
         followup=_followup(faq.get("followup")),
         support=_support(faq.get("support")),
         environment=environment,

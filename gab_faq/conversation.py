@@ -17,7 +17,9 @@ def assert_no_tools(request: dict) -> dict:
     return request
 
 
-def normalize_history(history: list[dict] | None, limit: int) -> list[dict]:
+def normalize_history(
+    history: list[dict] | None, limit: int, *, keep_last_user=False
+) -> list[dict]:
     """Make earlier thread messages into a valid conversation: only the last `limit` messages,
     starting with a user message, with consecutive messages from the same side merged."""
     if limit <= 0:
@@ -35,6 +37,6 @@ def normalize_history(history: list[dict] | None, limit: int) -> list[dict]:
     while merged and merged[0]["role"] != "user":
         merged.pop(0)
     # The new question is appended as a user message, so history must end with the assistant.
-    if merged and merged[-1]["role"] == "user":
+    if merged and merged[-1]["role"] == "user" and not keep_last_user:
         merged.pop()
     return merged

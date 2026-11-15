@@ -105,6 +105,8 @@ def test_failed_attempts_cannot_be_retried_past_cap(tmp_path):
         {"questions_per_day": True},
         {"max_prompt_bytes": 10},
         {"max_output_tokens": 10000},
+        {"provider_requests_per_minute": 0},
+        {"provider_requests_per_minute": 601},
         {"unknown": 1},
     ],
 )

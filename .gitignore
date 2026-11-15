@@ -19,6 +19,7 @@ output/*.csv
 .DS_Store
 output/*.jsonl
 eval-report.json
+live-eval-report.json
 .pytest_cache/
 models/
 output/*.txt
