@@ -110,8 +110,8 @@ def test_discord_routes():
 
 
 def test_only_in():
-    s = _platform({"only_in": ["Project GAB P5 QC Deployed"]})
-    assert s.in_scope("support", "4", "project gab p5 qc deployed", "200")
+    s = _platform({"only_in": ["Project GAB P6 QC Deployed"]})
+    assert s.in_scope("support", "4", "project gab p6 qc deployed", "200")
     assert not s.in_scope("support", "5", "Project Maitrix")
     assert _platform({}).in_scope("anything")  # empty = anywhere
 

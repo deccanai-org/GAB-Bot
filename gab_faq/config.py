@@ -86,8 +86,8 @@ class PlatformSettings:
 
     Every list below can hold, in any mix (compared without case or a leading #):
       - a channel name:                  project-related-queries
-      - a category (section) name:       Project GAB P5 QC Deployed   (= every channel in it)
-      - a category/channel pair:         Project GAB P5 QC Deployed/support   (one exact channel)
+      - a category (section) name:       Project GAB P6 QC Deployed   (= every channel in it)
+      - a category/channel pair:         Project GAB P6 QC Deployed/support   (one exact channel)
       - a channel or category ID:        1570402201296175157
     Slack has no categories: use channel IDs there."""
 

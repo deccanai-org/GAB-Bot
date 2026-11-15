@@ -188,7 +188,7 @@ def test_bucketing_watches_gab_sections_and_exports_the_section(tmp_path):
         "from gab_faq.discord_bot.queries import section, CSV_FIELDS\n"
         "from gab_faq.discord_bot.views import WhatElseView, FAQPanelView\n"
         "from types import SimpleNamespace as N\n"
-        "qc = N(name='Project GAB P5 QC Deployed')\n"
+        "qc = N(name='Project GAB P6 QC Deployed')\n"
         "other = N(name='Project Maitrix')\n"
         "print('RESULT', app.queries.is_watched(N(name='support', category=qc)),"
         " app.queries.is_watched(N(name='support', category=other)),"
@@ -215,6 +215,6 @@ def test_bucketing_watches_gab_sections_and_exports_the_section(tmp_path):
         timeout=120,
     )
     assert result.returncode == 0, result.stderr
-    assert "RESULT True False True Project GAB P5 QC Deployed True" in result.stdout
+    assert "RESULT True False True Project GAB P6 QC Deployed True" in result.stdout
     # Buttons under results and on the main panel keep working on old messages / after restarts.
     assert "PERSISTENT True True" in result.stdout
