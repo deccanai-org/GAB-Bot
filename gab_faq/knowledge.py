@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import yaml
@@ -48,6 +48,11 @@ class FaqDocument:
     # header keeps a file out of every answer (see KnowledgeBase.reload_if_changed).
     approved: bool = True
     tutorials: tuple[TutorialVideo, ...] = ()
+    source: str = ""
+    version: str = ""
+    status: str = "current"
+    external_processing_approved: bool = False
+    entry_metadata: dict = field(default_factory=dict)
 
 
 def parse_document(path: Path) -> FaqDocument:
@@ -76,7 +81,11 @@ def parse_document(path: Path) -> FaqDocument:
         updated=str(meta.get("updated", "")),
         body=body.strip(),
         approved=meta.get("approved", True) is not False
-        and str(meta.get("status", "")).strip().lower() != "archived",
+        and str(meta.get("status", "")).strip().lower() not in {"archived", "superseded", "draft"},
+        source=str(meta.get("source", path.name)),
+        version=str(meta.get("version", meta.get("phase", ""))),
+        status=str(meta.get("status", "current")),
+        external_processing_approved=meta.get("external_processing_approved") is True,
     )
 
 
@@ -95,6 +104,9 @@ class KnowledgeBase:
         catalog = self.directory / "playground-videos.yaml"
         if catalog.exists():
             files.append(catalog)
+        policy = self.directory / "entry-policy.yaml"
+        if policy.exists():
+            files.append(policy)
         return tuple((f.name, f.stat().st_mtime_ns, f.stat().st_size) for f in files)
 
     def reload_if_changed(self) -> bool:
@@ -105,6 +117,14 @@ class KnowledgeBase:
             if not signature:
                 raise FileNotFoundError(f"No FAQ files (*.md) found in {self.directory}")
             tutorials = load_tutorials(self.directory / "playground-videos.yaml")
+            policy_path = self.directory / "entry-policy.yaml"
+            policy = (
+                yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+                if policy_path.exists()
+                else {}
+            ) or {}
+            if not isinstance(policy, dict):
+                raise ValueError("entry-policy.yaml must contain a mapping")
             docs = []
             for p in sorted(self.directory.glob("*.md")):
                 doc = parse_document(p)
@@ -119,7 +139,18 @@ class KnowledgeBase:
                         p.name,
                     )
                 else:
-                    docs.append(replace(doc, tutorials=tutorials))
+                    approval = policy.get("documents", {}).get(p.name, {})
+                    docs.append(
+                        replace(
+                            doc,
+                            tutorials=tutorials,
+                            external_processing_approved=approval.get(
+                                "external_processing_approved", doc.external_processing_approved
+                            )
+                            is True,
+                            entry_metadata=policy.get("entries", {}),
+                        )
+                    )
             if not docs:
                 raise FileNotFoundError(f"No approved FAQ files (*.md) in {self.directory}")
             self.documents = docs

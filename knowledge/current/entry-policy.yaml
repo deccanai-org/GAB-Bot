@@ -1,0 +1,41 @@
+# Reviewable policy supported by the supplied PDFs; no inference from filenames alone.
+# Approval applies to these existing FAQ excerpts only, not new imports or incoming user data.
+documents:
+  phase6-annotation.md: {external_processing_approved: true}
+  phase6-qc.md: {external_processing_approved: true}
+  phase6-recording.md: {external_processing_approved: true}
+  phase6-instructions.md: {external_processing_approved: true}
+  phase6-methodology.md: {external_processing_approved: true}
+  phase6-evaluation.md: {external_processing_approved: true}
+  playground-help.md: {external_processing_approved: true}
+  rating-reference.md: {external_processing_approved: true}
+precedence_evidence:
+  - "Annotation- FAQ.pdf p1 heading: Phase 6.1, 14 Nov 2026; p2 Q15: recording not needed; debug mandatory."
+  - "GAB Instructions - Production - v6.1.pdf p73: older recording update explicitly says no need to follow effective 13 November; no screen recording for Phase 6.1."
+  - "QC-FAQ.pdf p5 heading explicitly labels its model and recording checklist Phase 5."
+  - "GAB Tasking Flow and Rating Methodology - v6.1.pdf p2: no screen recording, Gemini debug mandatory."
+entries:
+  A8:
+    source_location: "Annotation- FAQ.pdf p2 Q15; 14 Nov 2026 Phase 6.1 heading on p1"
+    claims: {phase6.1.screen_recording: not_required}
+    requires: [A7]
+  A7: {source_location: "Annotation- FAQ.pdf p3 Q16", claims: {phase6.1.gemini_debug: required}}
+  Q0:
+    source_location: "QC-FAQ.pdf p5 Phase 5 heading; Annotation- FAQ.pdf p1-3; production v6.1 update p73"
+    claims: {phase6.1.screen_recording: not_required}
+    requires: [A8, Q1]
+  Q2:
+    source_location: "QC-FAQ.pdf p5 Q2 is Phase 5; Annotation- FAQ.pdf p1 Q1-Q3 is Phase 6.1"
+    requires: [Q1]
+  Q1: {source_location: "Annotation- FAQ.pdf p1 Q1-Q3"}
+  SR2:
+    source_location: "QC-FAQ.pdf p6 Q10-Q13 (Phase 5); Annotation- FAQ.pdf p2 Q15 (Phase 6.1)"
+    claims: {phase6.1.screen_recording: not_required}
+    requires: [Q0, A8]
+  SR0: {requires: [A8], claims: {phase6.1.screen_recording: not_required}}
+  SR1: {requires: [A7], claims: {phase6.1.screen_recording: not_required}}
+  Q11: {requires: [A8], claims: {phase6.1.screen_recording: not_required}}
+  IN1: {requires: [A7], claims: {phase6.1.screen_recording: not_required}}
+  Q14: {requires: [F5], source_location: "GAB Tasking Flow and Rating Methodology - v6.1.pdf p3, null-debug exception"}
+  A12: {requires: [A13], source_location: "Annotation- FAQ.pdf p3 Q20-Q21"}
+  IN18: {requires: [IN36], source_location: "Production v6.1.pdf p43-46 and p69-73; Annotation FAQ p3 Q16-Q17"}

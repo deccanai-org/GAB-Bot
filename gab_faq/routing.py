@@ -11,6 +11,10 @@ Categories and default contacts:
     payment            payment queries          Amtul
     environment_reset  environment resets       Divya Sai
 Throttle (task limit) increase requests and task issue reports go to task_qc unless configured otherwise.
+
+Staff IDs are stored as strings (config.yaml: user_ids: ["1533459501393379488"]) and the Discord
+mention text is built here, in code. Nothing a model writes can become a mention: a model may only
+SUGGEST one of the fixed category names below, and resolve_route() validates that suggestion.
 """
 
 from __future__ import annotations
@@ -19,25 +23,39 @@ import re
 from dataclasses import dataclass, field
 
 CATEGORIES = ("task_qc", "playground", "payment", "environment_reset")
+# Request subtypes a model may suggest. "throttle" is a distinct request (a task-limit increase), but it
+# is routed to SupportSettings.throttle_route (task_qc by default) and points the asker to the form.
+REQUEST_SUBTYPES = ("throttle",)
+SUGGESTIBLE = CATEGORIES + REQUEST_SUBTYPES
+# Specific categories outrank the task_qc catch-all, in this order.
+SPECIFIC_PRECEDENCE = ("payment", "playground", "environment_reset")
 
 # A mention in config.yaml must be one or more Discord user/role mentions: "<@123>", "<@&456>".
 # Anything else (e.g. "@everyone", a name, a channel) is rejected so a typo can never mass-ping.
 MENTION_TOKEN_RE = re.compile(r"<@(!?|&)(\d{5,25})>")
 MENTIONS_ONLY_RE = re.compile(r"^\s*(<@(!?|&)\d{5,25}>\s*)*$")
+ID_RE = re.compile(r"^\d{5,25}$")
 
 
 @dataclass(frozen=True)
 class Contact:
     name: str  # shown to freelancers, e.g. "Amtul / Adiba"
     label: str  # what they handle, e.g. "task queries and QC"
-    mention: str = ""  # optional Discord mention(s), e.g. "<@123> <@456>"; empty = no ping
+    user_ids: tuple[str, ...] = ()  # Discord user IDs, as strings; empty = no ping
+    role_ids: tuple[str, ...] = ()  # Discord role IDs, as strings
+
+    @property
+    def mention(self) -> str:
+        """The Discord mention text, built from the stored IDs (never from config or model text)."""
+        users, roles = self.mention_ids()
+        return " ".join([f"<@{ident}>" for ident in users] + [f"<@&{ident}>" for ident in roles])
 
     def mention_ids(self) -> tuple[list[int], list[int]]:
-        """(user IDs, role IDs) in `mention`, for an AllowedMentions that pings only them."""
-        users, roles = [], []
-        for kind, ident in MENTION_TOKEN_RE.findall(self.mention):
-            (roles if kind == "&" else users).append(int(ident))
-        return users, roles
+        """(user IDs, role IDs), each once, for an AllowedMentions that pings only them."""
+        return (
+            [int(i) for i in dict.fromkeys(self.user_ids)],
+            [int(i) for i in dict.fromkeys(self.role_ids)],
+        )
 
 
 DEFAULT_CONTACTS = {
@@ -69,9 +87,30 @@ class SupportSettings:
         return self.contacts.get(category) or self.contacts[self.default_route]
 
 
+def _id_list(category: str, key: str, value) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError(f"gab_faq.support.contacts.{category}.{key} must be a list of ID strings")
+    ids = []
+    for item in value:
+        # Quoted strings only: a bare YAML integer is accepted by Python but silently loses precision
+        # in tools that read the file as JSON numbers (Discord IDs exceed 2^53).
+        if not isinstance(item, str) or not ID_RE.match(item.strip()):
+            raise ValueError(
+                f"gab_faq.support.contacts.{category}.{key} entries must be quoted digit strings "
+                f'like "1533459501393379488", got {item!r}'
+            )
+        ids.append(item.strip())
+    return tuple(dict.fromkeys(ids))
+
+
 def parse_contacts(section: dict | None) -> dict:
-    """config.yaml contacts -> {category: Contact}. Unknown categories or malformed mentions raise
-    ValueError, so a broken routing table stops the FAQ part at startup instead of misrouting."""
+    """config.yaml contacts -> {category: Contact}. Unknown categories or malformed IDs raise
+    ValueError, so a broken routing table stops the FAQ part at startup instead of misrouting.
+
+    Preferred form: {name: "Amtul", user_ids: ["1533459501393379488"]}. The older
+    {mention: "<@123> <@&456>"} form is still read, but only its numeric IDs are kept."""
     contacts = dict(DEFAULT_CONTACTS)
     for category, value in (section or {}).items():
         if category not in CATEGORIES:
@@ -83,12 +122,22 @@ def parse_contacts(section: dict | None) -> dict:
         mention = str(value.get("mention") or "").strip()
         if not name:
             raise ValueError(f"gab_faq.support.contacts.{category}: name is required")
-        if mention and not MENTIONS_ONLY_RE.match(mention):
-            raise ValueError(
-                f"gab_faq.support.contacts.{category}.mention must be Discord mentions like "
-                f"<@123> or <@&456>, got {mention!r}"
-            )
-        contacts[category] = Contact(name, DEFAULT_CONTACTS[category].label, mention)
+        users = _id_list(category, "user_ids", value.get("user_ids"))
+        roles = _id_list(category, "role_ids", value.get("role_ids"))
+        if mention:
+            if users or roles:
+                raise ValueError(
+                    f"gab_faq.support.contacts.{category}: use user_ids/role_ids or mention, not both"
+                )
+            if not MENTIONS_ONLY_RE.match(mention):
+                raise ValueError(
+                    f"gab_faq.support.contacts.{category}.mention must be Discord mentions like "
+                    f"<@123> or <@&456>, got {mention!r}"
+                )
+            tokens = MENTION_TOKEN_RE.findall(mention)
+            users = tuple(dict.fromkeys(i for kind, i in tokens if kind != "&"))
+            roles = tuple(dict.fromkeys(i for kind, i in tokens if kind == "&"))
+        contacts[category] = Contact(name, DEFAULT_CONTACTS[category].label, users, roles)
     return contacts
 
 
@@ -121,10 +170,11 @@ TASK_PROBLEM_RE = re.compile(
 
 def classify(question: str, support: SupportSettings) -> str:
     """The category (and so the contact) for a question the FAQ couldn't fully answer."""
-    from .search import is_payment_question  # local import: search imports nothing from here
+    from .policy import is_payment_matter  # local import: policy imports nothing from here
 
     q = question or ""
-    if is_payment_question(q):
+    # The asker's own pay, not any mention of payment (a persona's "payment reminder", seen live).
+    if is_payment_matter(q):
         return "payment"
     if PLAYGROUND_RE.search(q):
         return "playground"
@@ -133,6 +183,27 @@ def classify(question: str, support: SupportSettings) -> str:
     if THROTTLE_RE.search(q):
         return support.throttle_route
     return support.default_route
+
+
+def resolve_route(question: str, support: SupportSettings, suggestion: str = "") -> tuple[str, str]:
+    """(category, request hint) for a question a person must handle. Decided by code.
+
+    The keyword classifier picks a specific category (payment, playground, environment reset) over
+    the task_qc catch-all. A model's suggestion is only consulted when the classifier found nothing
+    specific, and only if it is one of the fixed names in SUGGESTIBLE; anything else is ignored. A
+    throttle suggestion stays a distinct request: it routes to throttle_route with the form hint."""
+    category = classify(question, support)
+    hint = hint_for(question)
+    suggestion = (suggestion or "").strip().lower() if isinstance(suggestion, str) else ""
+    # Code already recognised a specific case (a category, a throttle request, or a problem with a
+    # specific task, e.g. "task 4471 won't submit", seen live): the model cannot override it.
+    if category in SPECIFIC_PRECEDENCE or hint or suggestion not in SUGGESTIBLE:
+        return category, hint
+    if suggestion == "throttle":
+        return support.throttle_route, "throttle"
+    if suggestion in SPECIFIC_PRECEDENCE:
+        return suggestion, hint
+    return category, hint
 
 
 def hint_for(question: str) -> str:

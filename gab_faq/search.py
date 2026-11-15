@@ -33,6 +33,7 @@ from typing import Protocol
 
 from .contracts import Answer
 from .knowledge import FaqDocument, KnowledgeBase
+from .sources import SourceLink, extract_links, html_text
 from .storage import atomic_write
 from .tutorials import TutorialVideo, with_tutorials
 
@@ -79,7 +80,7 @@ THANKS_WORDS = frozenset({"thanks", "thank", "thx", "ty", "tysm"})
 # "ok got it, thanks bro"). Only used when the message also has a greeting/thanks word and no "?".
 SMALL_TALK_FILLER = frozenset(
     """
-all everyone guys bro bhai sir maam mam team folks that this it up cleared clears clear helped helps
+all everyone guys bro bhai sir maam mam team folks there that this it up cleared clears clear helped helps
 helpful makes sense perfect awesome appreciated appreciate info answer for the again understood yes
 yeah yep right clarifying
 """.split()
@@ -141,6 +142,16 @@ class Entry:
     # For summary entries (see SUMMARY_RE): words that show the question is about the summary itself.
     triggers: tuple[str, ...] = ()
     tutorials: tuple[TutorialVideo, ...] = ()
+    source_path: str = ""
+    source_location: str = ""
+    version: str = ""
+    updated: str = ""
+    status: str = "current"
+    requires: tuple[str, ...] = ()
+    supersedes: tuple[str, ...] = ()
+    claims: tuple[tuple[str, str], ...] = ()
+    links: tuple[SourceLink, ...] = ()
+    external_processing_approved: bool = False
 
     @property
     def text(self) -> str:
@@ -148,7 +159,11 @@ class Entry:
 
     @property
     def answer_body(self) -> str:
-        return with_tutorials(self.body, self.tutorials)
+        body = html_text(self.body) if re.search(r"<a\b", self.body, re.I) else self.body
+        missing = [link for link in self.links if link.url not in body]
+        if missing:
+            body += "\n\n" + "\n".join(f"- {link.label}: <{link.url}>" for link in missing)
+        return with_tutorials(body, self.tutorials)
 
 
 def split_entries(doc: FaqDocument) -> list[Entry]:
@@ -162,23 +177,41 @@ def split_entries(doc: FaqDocument) -> list[Entry]:
     item_id = title = item_section = item_audience = None
     item_triggers: tuple[str, ...] = ()
     lines: list[str] = []
+    item_line = 0
 
     def flush():
         if item_id:
+            metadata = doc.entry_metadata.get(item_id, {})
+            status = metadata.get("status", doc.status)
+            if status not in {"current", "superseded", "conflicting", "draft"}:
+                raise ValueError(f"Invalid status for FAQ entry {item_id}")
+            body = "\n".join(lines).strip()
             entries.append(
                 Entry(
                     item_id,
                     title,
-                    "\n".join(lines).strip(),
+                    body,
                     item_section,
                     item_audience or doc.audience,
                     doc.title,
                     item_triggers,
                     tuple(video for video in doc.tutorials if item_id in video.faq_ids),
+                    str(doc.path),
+                    metadata.get(
+                        "source_location", f"{doc.source}; {doc.path.name}:body-line-{item_line}"
+                    ),
+                    doc.version,
+                    doc.updated,
+                    status,
+                    tuple(metadata.get("requires", ())),
+                    tuple(metadata.get("supersedes", ())),
+                    tuple((str(k), str(v)) for k, v in metadata.get("claims", {}).items()),
+                    extract_links(body, f"{doc.path.name}:{item_line}"),
+                    doc.external_processing_approved,
                 )
             )
 
-    for line in doc.body.splitlines():
+    for line_number, line in enumerate(doc.body.splitlines(), 1):
         heading = HEADING_RE.match(line)
         if heading:
             flush()
@@ -200,6 +233,7 @@ def split_entries(doc: FaqDocument) -> list[Entry]:
         if item:
             flush()
             item_id, title, item_section, lines = item.group(1), item.group(2).strip(), section, []
+            item_line = line_number
             item_audience, item_triggers = section_audience, section_triggers
             continue
         if item_id:
@@ -242,7 +276,10 @@ def with_thread_context(question: str, history: list[dict] | None) -> str:
         ),
         "",
     )
-    if previous and (FOLLOWUP_RE.match(question) or len(words(question)) <= 2):
+    reference = re.match(
+        r"^(?:it|that|this|those|these|same|why|yes|no|[ab]\??$)\b", question, re.I
+    )
+    if previous and (FOLLOWUP_RE.match(question) or (len(words(question)) <= 2 and reference)):
         # A follow-up about B changes the earlier product's subject. Keeping both
         # letters made a simple follow-up retrieve a mixed-model answer.
         previous_products = list(AB_RE.finditer(previous.lower()))
@@ -422,7 +459,12 @@ class FaqSearch:
         signature = self.knowledge._signature
         if signature == self._built_for and self.entries:
             return
-        entries = [e for doc in self.knowledge.documents for e in split_entries(doc)]
+        entries = [
+            e
+            for doc in self.knowledge.documents
+            for e in split_entries(doc)
+            if e.status == "current"
+        ]
         if not entries:
             raise ValueError(
                 f"No numbered FAQ entries (like 'A1. Question') found in {self.knowledge.directory}"

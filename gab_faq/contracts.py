@@ -7,9 +7,21 @@ from typing import Literal, Protocol
 
 Role = Literal["annotator", "qc", "qm", "unknown"]
 Outcome = Literal[
-    "answered", "partial", "not_in_faq", "needs_human", "small_talk", "error", "limited"
+    "answered",  # approved FAQ text, or an explanation grounded in quoted FAQ entries
+    "general",  # general guidance (definitions, writing tips), labelled as not an official rule
+    "partial",
+    "not_in_faq",
+    "needs_human",
+    "small_talk",
+    "error",
+    "limited",
+    "clarification",
+    "unrelated",
+    "declined",  # e.g. choosing a rating or writing a justification for a live task
 ]
 ESCALATE_OUTCOMES = frozenset({"partial", "not_in_faq", "needs_human", "error"})
+# Replies that can be followed by "Didn't help? Ask a person".
+HELPFUL_OUTCOMES = frozenset({"answered", "general"})
 
 
 @dataclass
@@ -22,6 +34,9 @@ class Answer:
     via: str = ""
     route: str = ""
     route_hint: str = ""
+    # A category a model proposed for a hand-off. Only a hint: routing.resolve_route validates it
+    # against the fixed category names and the code classifier decides.
+    suggested_route: str = ""
 
     @property
     def needs_escalation(self) -> bool:

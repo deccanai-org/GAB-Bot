@@ -6,11 +6,14 @@ import contextvars
 import math
 import sqlite3
 import time
+import uuid
 from contextlib import closing
 from dataclasses import dataclass, fields
 from pathlib import Path
 
 USER_KEY = contextvars.ContextVar("faq_model_user", default="local")
+# Reply provenance for a question turned away before any provider request was sent.
+PROVIDER_BUSY = "qwen: provider busy"
 
 
 @dataclass(frozen=True)
@@ -18,20 +21,40 @@ class ModelLimits:
     questions_per_day: int = 20
     questions_per_minute: int = 3
     max_prompt_bytes: int = 8000
-    max_output_tokens: int = 256
+    max_output_tokens: int = 300
+    max_input_tokens: int = 2000
+    retrieval_candidates: int = 6
+    provider_tokens_per_minute: int = 90000
+    provider_queue_capacity: int = 16
+    provider_max_wait_seconds: int = 3
+    provider_max_retries: int = 2
+    provider_backoff_seconds: int = 1
     max_answer_chars: int = 6000
     max_question_chars: int = 1500
     max_history_message_chars: int = 400
+    # Whole-bot cap on provider requests per rolling minute. Alibaba limits the whole account
+    # (60 requests/minute for Qwen3-Omni-Flash, Singapore), so stay below it unless it is raised.
+    provider_requests_per_minute: int = 50
+    # Every provider request one question may cause, across the targeted retrieval retry and
+    # rate-limit retries together. Bounds the cost of a single question.
+    provider_calls_per_question: int = 3
 
     def __post_init__(self):
         for item in fields(self):
             value = getattr(self, item.name)
-            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            minimum = 0 if item.name == "provider_max_retries" else 1
+            if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
                 raise ValueError(f"model_limits.{item.name} must be a positive integer")
         if not 4000 <= self.max_prompt_bytes <= 64000:
             raise ValueError("max_prompt_bytes must be between 4000 and 64000")
         if not 64 <= self.max_output_tokens <= 1024:
             raise ValueError("max_output_tokens must be between 64 and 1024")
+        if not 1 <= self.provider_requests_per_minute <= 600:
+            raise ValueError("provider_requests_per_minute must be between 1 and 600")
+        if self.provider_max_retries > 3 or self.provider_max_wait_seconds > 10:
+            raise ValueError("Provider retries/wait exceed the bounded request deadline")
+        if not 1 <= self.provider_calls_per_question <= 6:
+            raise ValueError("provider_calls_per_question must be between 1 and 6")
 
     @classmethod
     def parse(cls, values=None):
@@ -67,8 +90,11 @@ class ModelQuota:
                 "CREATE INDEX IF NOT EXISTS model_attempts_user_time "
                 "ON model_attempts(user_key, started)"
             )
+            columns = {row[1] for row in db.execute("PRAGMA table_info(model_attempts)")}
+            if "reservation_id" not in columns:
+                db.execute("ALTER TABLE model_attempts ADD COLUMN reservation_id TEXT")
 
-    def reserve(self, user_key: str) -> None:
+    def reserve(self, user_key: str) -> str:
         now = self.clock()
         with closing(sqlite3.connect(self.path, timeout=5)) as db, db:
             db.execute("BEGIN IMMEDIATE")
@@ -90,7 +116,29 @@ class ModelQuota:
             if len(recent) >= self.limits.questions_per_minute:
                 seconds = max(1, math.ceil(recent[0] + 60 - now))
                 raise QuotaExceeded(f"Please wait {seconds} second(s) before another FAQ question.")
-            db.execute("INSERT INTO model_attempts VALUES (?, ?)", (user_key, now))
+            reservation = uuid.uuid4().hex
+            db.execute(
+                "INSERT INTO model_attempts(user_key, started, reservation_id) VALUES (?, ?, ?)",
+                (user_key, now, reservation),
+            )
+            return reservation
+
+    def refund(self, user_key: str, reservation_id=None) -> None:
+        """Give back this user's newest reservation. Only for a question turned away before any
+        provider request was sent; a failed provider attempt still counts."""
+        with closing(sqlite3.connect(self.path, timeout=5)) as db, db:
+            if reservation_id is not None:
+                db.execute(
+                    "DELETE FROM model_attempts WHERE user_key = ? AND reservation_id = ?",
+                    (user_key, reservation_id),
+                )
+                return
+            db.execute(
+                "DELETE FROM model_attempts WHERE rowid = ("
+                "SELECT rowid FROM model_attempts WHERE user_key = ? "
+                "ORDER BY started DESC LIMIT 1)",
+                (user_key,),
+            )
 
 
 def answer_as_user(engine, user_key: str, question: str, role="unknown", history=None):

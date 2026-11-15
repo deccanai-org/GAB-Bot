@@ -313,6 +313,15 @@ gab_faq:
   engine: qwen
   model: qwen3-omni-flash
 
+  # Local BM25 searches the entire approved FAQ. Exact matches are rendered locally.
+  # A provider failure is never replaced by a semantically "close" answer.
+  local_backstop: false  # retained for configuration compatibility; Qwen uses BM25 now
+  # Existing FAQ excerpts have explicit approval in entry-policy.yaml. Sanitized questions are
+  # sent to Qwen (approved by the project owner, 15 Nov 2026; fields: docs/outbound-payload.md).
+  # Earlier thread messages are a separate data category: keep history off unless approved.
+  external_questions_approved: true
+  external_history_approved: false
+
   # Used only with engine: search; this embedding model is not the bot's LLM.
   search:
     model: BAAI/bge-small-en-v1.5   # small model that runs inside the bot (downloaded at build time)
@@ -329,7 +338,21 @@ gab_faq:
     questions_per_day: 20        # per user, rolling 24 hours; persisted across restarts
     questions_per_minute: 3      # shared across that user's channels
     max_prompt_bytes: 8000       # complete serialized UTF-8 request, including history and FAQ
-    max_output_tokens: 256       # FAQ selection JSON only; answer prose comes from approved files
+    max_input_tokens: 2000       # planning estimate (bytes / 3); actual provider usage is logged
+    max_output_tokens: 300       # the JSON reply: explanation, quotes, general guidance
+    retrieval_candidates: 6
+    provider_tokens_per_minute: 90000
+    provider_queue_capacity: 16
+    provider_max_wait_seconds: 3
+    provider_max_retries: 2      # per request, on 429/502/503/504 only
+    provider_backoff_seconds: 1
+    provider_calls_per_question: 3   # all requests one question may cause, retries included
+    # Whole-bot cap on Alibaba requests per rolling minute. Alibaba limits the whole account to
+    # 60 requests and 100,000 tokens a minute for qwen3-omni-flash (Singapore); a request is about
+    # 1,650 tokens, so both limits bind at about 60. Past the cap a question waits up to 10 s, then
+    # gets a "busy, ask again in a minute" reply (no staff card, no use of the user's daily
+    # allowance). Raise it only after Alibaba raises the account limit.
+    provider_requests_per_minute: 50
     max_answer_chars: 6000       # predefined FAQ output; longer guidance escalates
     max_question_chars: 1500
     max_history_message_chars: 400
@@ -381,12 +404,12 @@ gab_faq:
   support:
     enabled: true
     contacts:
-      task_qc:           {name: "Amtul / Adiba", mention: "<@1533459501393379488> <@1568512803986346028>"}   # task queries and QC
-      playground:        {name: "Rachana",       mention: "<@1152255102778884159>"}   # playground issues
-      payment:           {name: "Amtul",         mention: "<@1533459501393379488>"}   # payment queries
-      environment_reset: {name: "Divya Sai",     mention: "<@1490962186690887823>"}   # environment resets
-      # mention: Discord mentions to tag on the staff card, e.g. "<@123456789012345678>" or
-      # "<@123> <@456>"; empty = name only, no ping. Anything other than <@id>/<@&id> is rejected.
+      task_qc:           {name: "Amtul / Adiba", user_ids: ["1533459501393379488", "1568512803986346028"]}   # task queries and QC
+      playground:        {name: "Rachana",       user_ids: ["1152255102778884159"]}   # playground issues
+      payment:           {name: "Amtul",         user_ids: ["1533459501393379488"]}   # payment queries
+      environment_reset: {name: "Divya Sai",     user_ids: ["1490962186690887823"]}   # environment resets
+      # user_ids: Discord user IDs as QUOTED strings (role_ids for roles). The bot builds the
+      # mentions (<@id>) in code; empty = name only, no ping. Each person is notified once per card.
     throttle_requests_go_to: task_qc   # /throttle-request and task-limit questions
     task_issues_go_to: task_qc         # /task-issue
     other_questions_go_to: task_qc     # anything that matches no category above
