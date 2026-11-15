@@ -382,8 +382,8 @@ def test_staging_marks_replies(tmp_path):
 
 # --- The real GAB layout: two sections with the SAME channel names ---
 
-ANNOTATORS = SimpleNamespace(name="Project GAB P5 Annotators Deployed", id=100)
-QC = SimpleNamespace(name="Project GAB P5 QC Deployed", id=200)
+ANNOTATORS = SimpleNamespace(name="Project GAB P6 Annotators Deployed", id=100)
+QC = SimpleNamespace(name="Project GAB P6 QC Deployed", id=200)
 OTHER_PROJECT = SimpleNamespace(name="Project Maitrix", id=300)
 
 GAB_CONFIG = {
