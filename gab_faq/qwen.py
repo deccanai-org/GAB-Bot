@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import ssl
 import time
+from contextlib import nullcontext
 
 import httpx
 
@@ -38,8 +40,8 @@ class Qwen:
         self.model = model
         self.limits = limits or ModelLimits()
         self.max_history_messages = min(max_history_messages, 4)
-        # The module-level stream context opens and closes its client per call.
-        self.client = client or httpx
+        # An injected client stays caller-owned; default clients close after each call.
+        self.client = client
 
     def build_request(self, question, role="unknown", history=None):
         question = clean_untrusted(question).strip()
@@ -90,14 +92,23 @@ class Qwen:
         length, started = 0, time.monotonic()
         try:
             # No retries, redirects, automatic provider fallback, tools or media uploads.
-            with self.client.stream(
-                "POST",
-                ENDPOINT,
-                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                content=request_bytes(request),
-                timeout=httpx.Timeout(10, connect=5),
-                follow_redirects=False,
-            ) as response:
+            # Include system-trusted roots (including Windows) while verifying TLS and hostname.
+            client_context = (
+                nullcontext(self.client)
+                if self.client is not None
+                else httpx.Client(verify=ssl.create_default_context())
+            )
+            with (
+                client_context as client,
+                client.stream(
+                    "POST",
+                    ENDPOINT,
+                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                    content=request_bytes(request),
+                    timeout=httpx.Timeout(10, connect=5),
+                    follow_redirects=False,
+                ) as response,
+            ):
                 response.raise_for_status()
                 for line in response.iter_lines():
                     if time.monotonic() - started > 25:

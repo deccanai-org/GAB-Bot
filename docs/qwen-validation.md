@@ -12,6 +12,9 @@ The fixed API endpoint is
 model `qwen3-omni-flash`. Credentials are read only from `DASHSCOPE_API_KEY` in the
 environment/ignored `.env` or the existing deployment secret-file mechanism.
 The prior provider key is unused and is not renamed or sent to Alibaba.
+HTTPS uses the system's trusted certificate store, including Windows roots,
+with certificate and hostname verification enabled. Default HTTP clients close
+after each request; explicitly injected clients remain caller-owned.
 
 The [official model page](https://www.alibabacloud.com/help/en/model-studio/qwen3-omni-flash)
 states that structured output is unsupported. The

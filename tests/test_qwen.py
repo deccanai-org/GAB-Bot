@@ -1,4 +1,5 @@
 import json
+import ssl
 from dataclasses import replace
 
 import httpx
@@ -70,6 +71,22 @@ def test_streamed_selection_publishes_only_approved_faq(knowledge):
     assert not {"tools", "tool_choice", "functions", "function_call", "mcp_servers"} & set(payload)
     assert "SYNTHETIC_ALIBABA_KEY" not in requests[0].content.decode()
     assert len(requests[0].content) <= 8000
+
+
+@pytest.mark.parametrize("status", [200, 503])
+def test_default_client_verifies_tls_and_closes_after_request(knowledge, monkeypatch, status):
+    client, requests = fake_client(status=status)
+
+    def default_client(*, verify):
+        assert isinstance(verify, ssl.SSLContext)
+        assert verify.check_hostname
+        assert verify.verify_mode == ssl.CERT_REQUIRED
+        return client
+
+    monkeypatch.setattr(httpx, "Client", default_client)
+    answer = Qwen(knowledge).answer("Which model is Product A?", "annotator")
+    assert client.is_closed and len(requests) == 1
+    assert answer.outcome == ("answered" if status == 200 else "error")
 
 
 def test_related_video_is_rendered_from_catalog(knowledge):
