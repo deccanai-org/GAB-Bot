@@ -311,7 +311,9 @@ gab_faq:
   # Alibaba Cloud Model Studio, Qwen3-Omni-Flash, Singapore. No automatic provider fallback.
   # Set search for fully local retrieval without an external model.
   engine: qwen
+  model: qwen3-omni-flash
 
+  # Used only with engine: search; this embedding model is not the bot's LLM.
   search:
     model: BAAI/bge-small-en-v1.5   # small model that runs inside the bot (downloaded at build time)
     model_dir: models

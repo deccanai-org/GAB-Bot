@@ -380,7 +380,7 @@ def format_entry_answer(best: Entry, related: Entry | None = None, unsure: bool 
 
 
 class FaqSearch:
-    """Same interface as the Claude Brain: answer(question, role, history) -> Answer."""
+    """Local alternative to the Qwen LLM: answer(question, role, history) -> Answer."""
 
     def __init__(
         self,

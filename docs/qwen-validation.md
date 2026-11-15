@@ -3,7 +3,9 @@
 The user explicitly authorized the transfer of sanitized questions, short history
 and relevant approved internal FAQ excerpts to Alibaba Cloud Model Studio's
 Singapore endpoint. This supersedes the earlier local-only operating instruction.
-The active engine is `qwen`; local `search` remains an explicit alternative.
+The active and default engine is `qwen`, with `model: qwen3-omni-flash` explicitly
+set in `config.yaml`. Omitting either setting preserves the Qwen default;
+an incompatible model name is rejected. Local `search` remains an explicit alternative.
 
 The fixed API endpoint is
 `https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions`, with

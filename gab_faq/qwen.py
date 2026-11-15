@@ -9,6 +9,7 @@ import time
 
 import httpx
 
+from .config import QWEN_MODEL
 from .contracts import Answer
 from .conversation import assert_no_tools
 from .grounding import SOURCE_SELECTION_RULES, render_sources
@@ -25,13 +26,16 @@ from .search import NOT_FOUND
 
 log = logging.getLogger(__name__)
 ENDPOINT = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
-MODEL = "qwen3-omni-flash"
+MODEL = QWEN_MODEL
 ERROR_MESSAGE = "I couldn't complete the FAQ lookup. A team member can help with this question."
 
 
 class Qwen:
-    def __init__(self, knowledge, *, limits=None, max_history_messages=4, client=None):
+    def __init__(self, knowledge, *, model=MODEL, limits=None, max_history_messages=4, client=None):
+        if model != MODEL:
+            raise ValueError(f"Qwen requires model {MODEL!r}")
         self.knowledge = knowledge
+        self.model = model
         self.limits = limits or ModelLimits()
         self.max_history_messages = min(max_history_messages, 4)
         # The module-level stream context opens and closes its client per call.
@@ -50,7 +54,7 @@ class Qwen:
             )
             return assert_no_tools(
                 {
-                    "model": MODEL,
+                    "model": self.model,
                     "messages": [
                         {"role": "system", "content": system},
                         *history,

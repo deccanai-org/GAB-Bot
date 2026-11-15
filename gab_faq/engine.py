@@ -1,4 +1,4 @@
-"""Build guarded local retrieval or the explicitly selected Alibaba Qwen engine."""
+"""Build the guarded Qwen LLM or explicitly selected local retrieval."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ def _build_inner(settings: Settings, knowledge: KnowledgeBase):
 
         return Qwen(
             knowledge,
+            model=settings.model,
             limits=settings.model_limits,
             max_history_messages=settings.max_history_messages,
         )

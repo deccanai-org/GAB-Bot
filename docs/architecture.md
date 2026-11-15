@@ -34,7 +34,7 @@ The OS-backed owner lock prevents two local processes using the same output dire
 | `discord_bot/views.py` | Query explorer and persistent panel UI |
 | `discord_bot/app.py` | Composition, Discord events, background jobs, shutdown |
 
-Domain and search code depend on the shared contracts, not the Claude SDK or
+Domain and search code depend on the shared contracts, not a provider SDK or
 Discord. Support imports shared Discord helpers rather than the FAQ adapter.
 Services receive configuration explicitly; per-bot state is not stored in module
 globals. Provider SDK initialization is deferred until its engine is selected.
@@ -130,7 +130,7 @@ The base image and CI actions use verified immutable digests/commits.
 
 Inference has a fixed native thread pool, bounded admission, per-user limits, and
 conversation ordering. A caller timing out does not free a still-running native
-worker. Jobs that expire before starting are canceled. Claude API calls also
+worker. Jobs that expire before starting are canceled. Qwen API calls also
 have finite timeouts. Exports have concurrency, deadline, scan, row, and byte caps;
 large requests fail explicitly rather than silently returning incomplete exports.
 Support attachments are size-checked, plaintext attachments are scrubbed, and

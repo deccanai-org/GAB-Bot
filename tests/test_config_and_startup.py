@@ -15,6 +15,7 @@ def test_repo_config_yaml_has_a_valid_gab_faq_section():
     s = load_settings(ROOT / "config.yaml")
     assert s.environment in ("staging", "production")
     assert s.engine == "qwen"
+    assert s.model == "qwen3-omni-flash"
     assert s.search.model == "BAAI/bge-small-en-v1.5"
     assert s.knowledge_dir == ROOT / "knowledge" / "current"
     assert s.knowledge_dir.is_dir()
@@ -24,6 +25,22 @@ def test_missing_section_means_off(tmp_path):
     p = tmp_path / "config.yaml"
     p.write_text("channel_names: [general]\n")
     assert load_settings(p).enabled is False
+
+
+def test_omitted_engine_and_model_default_to_qwen(tmp_path):
+    p = tmp_path / "config.yaml"
+    p.write_text("gab_faq:\n  enabled: true\n")
+    settings = load_settings(p)
+    assert settings.engine == "qwen"
+    assert settings.model == "qwen3-omni-flash"
+
+
+@pytest.mark.parametrize("model", ["claude-sonnet", "gpt-4o", "qwen-plus", ""])
+def test_wrong_llm_model_rejected(tmp_path, model):
+    p = tmp_path / "config.yaml"
+    p.write_text(f'gab_faq:\n  model: "{model}"\n')
+    with pytest.raises(ValueError, match="gab_faq.model must be 'qwen3-omni-flash'"):
+        load_settings(p)
 
 
 def test_bad_environment_rejected(tmp_path):
@@ -84,7 +101,7 @@ def _start_bot(tmp_path, api_key: str, faq_config=None) -> subprocess.CompletedP
     env = {
         **os.environ,
         "PYTHONPATH": str(ROOT),
-        "ANTHROPIC_API_KEY": api_key,
+        "DASHSCOPE_API_KEY": api_key,
         "SECRETS_DIR": str(tmp_path / "no-secrets"),
         "DISCORD_TOKEN": "",
     }
@@ -116,6 +133,20 @@ def test_bot_starts_with_free_search_and_no_api_key(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "FAQ_ANSWERER=FaqAnswerer" in result.stdout
     assert "[FAQ] Answering is ON" in result.stderr and "FAQ search" in result.stderr
+
+
+@pytest.mark.parametrize("api_key", ["", "SYNTHETIC_ALIBABA_KEY"])
+def test_bot_startup_uses_qwen_by_default_without_provider_fallback(tmp_path, api_key):
+    faq_config = tmp_path / "qwen-default.yaml"
+    faq_config.write_text("gab_faq:\n  enabled: true\n")
+    result = _start_bot(tmp_path, api_key=api_key, faq_config=faq_config)
+    assert result.returncode == 0, result.stderr
+    if api_key:
+        assert "FAQ_ANSWERER=FaqAnswerer" in result.stdout
+        assert "Qwen3-Omni-Flash" in result.stderr
+    else:
+        assert "FAQ_ANSWERER=NoneType" in result.stdout
+        assert "Qwen requires DASHSCOPE_API_KEY" in result.stderr
 
 
 @pytest.mark.parametrize("engine", ["claude", "openai"])

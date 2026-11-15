@@ -6,6 +6,7 @@ Two places, the same as the rest of the bot:
     in /app/secrets/ named after the variable. Secrets used here:
       DISCORD_TOKEN       the same bot token the rest of bot.py uses
       SLACK_BOT_TOKEN, SLACK_APP_TOKEN   only for the Slack bot
+      DASHSCOPE_API_KEY   Qwen3-Omni-Flash in Alibaba Cloud Model Studio (Singapore)
 
 Secrets are never written in code or in config.yaml.
 """
@@ -126,6 +127,7 @@ def _platform(section: dict | None) -> PlatformSettings:
 
 
 ENGINES = ("search", "qwen")
+QWEN_MODEL = "qwen3-omni-flash"
 
 
 @dataclass(frozen=True)
@@ -217,8 +219,9 @@ def _support(section: dict | None) -> SupportSettings:
 class Settings:
     runtime: RuntimeSettings = field(default_factory=RuntimeSettings)
     enabled: bool = False
-    # Qwen is used only when explicitly selected; local search is also available.
-    engine: str = "search"
+    # Qwen is the bot's LLM; local search requires an explicit engine selection.
+    engine: str = "qwen"
+    model: str = QWEN_MODEL
     search: SearchSettings = field(default_factory=SearchSettings)
     followup: FollowupSettings = field(default_factory=FollowupSettings)
     # Contacts, /throttle-request and /task-issue (routing.py, support.py).
@@ -239,6 +242,8 @@ class Settings:
     def __post_init__(self):
         if self.engine not in ENGINES:
             raise ValueError(f"engine must be one of {ENGINES}")
+        if self.engine == "qwen" and self.model != QWEN_MODEL:
+            raise ValueError(f"gab_faq.model must be {QWEN_MODEL!r} for the qwen engine")
         if not 0 <= self.max_history_messages <= 50:
             raise ValueError("max_history_messages must be between 0 and 50")
 
@@ -258,13 +263,14 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
     knowledge_dir = Path(faq.get("knowledge_dir") or "knowledge/current")
     if not knowledge_dir.is_absolute():
         knowledge_dir = PROJECT_ROOT / knowledge_dir
-    engine = str(faq.get("engine", "search")).strip().lower()
+    engine = str(faq.get("engine", "qwen")).strip().lower()
     if engine not in ENGINES:
         raise ValueError(f"gab_faq.engine in config.yaml must be one of {ENGINES}, got {engine!r}")
     return Settings(
         runtime=RuntimeSettings.parse(cfg.get("runtime")),
         enabled=bool(faq.get("enabled", False)),
         engine=engine,
+        model=str(faq.get("model", QWEN_MODEL)).strip().lower(),
         search=_search(faq.get("search")),
         followup=_followup(faq.get("followup")),
         support=_support(faq.get("support")),

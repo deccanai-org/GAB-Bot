@@ -52,8 +52,10 @@ in configured QM channels.
 
 ## Answer engines
 
-`qwen` is the configured engine: Qwen3-Omni-Flash through Alibaba Cloud Model
-Studio's Singapore API. Set `DASHSCOPE_API_KEY` in ignored `.env` or deployment
+Qwen3-Omni-Flash is the bot's default LLM, including when the engine setting is
+omitted. The configuration explicitly selects `engine: qwen` and
+`model: qwen3-omni-flash` through Alibaba Cloud Model Studio's Singapore API.
+Set `DASHSCOPE_API_KEY` in ignored `.env` or deployment
 secrets. Only sanitized questions, up to four short history messages and selected
 approved FAQ excerpts are sent to that endpoint. This transfer was explicitly
 authorized. Do not put the key in Git, questions, logs or chat messages.
@@ -63,8 +65,10 @@ bot renders approved FAQ text and supplied video links. Invalid selections,
 unavailable services and unknown answers escalate to the team. No automatic
 retries, redirects or alternate-provider calls are used.
 
-Set `engine: search` for local CPU embedding and keyword retrieval without a model
-API key or external inference. Claude is not supported.
+Set `engine: search` explicitly for local CPU embedding and keyword retrieval
+without a model API key or external inference. The `search.model` setting names
+that optional embedding model; `gab_faq.model` names the Qwen LLM. A missing Qwen
+key disables answering and never switches engines automatically.
 
 Low-confidence or unmatched questions are escalated to the team. Keyword-only
 degraded mode always marks results uncertain. Retrieval can select an irrelevant

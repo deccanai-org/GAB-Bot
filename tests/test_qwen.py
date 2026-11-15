@@ -219,4 +219,5 @@ def test_qwen_settings_do_not_store_api_key(monkeypatch):
     settings = load_settings(ROOT / "config.yaml")
     assert settings.engine == "qwen" and settings.dashscope_api_key_set
     assert "SYNTHETIC_ALIBABA_KEY" not in repr(settings)
-    assert Settings().engine == "search"
+    assert Settings().engine == "qwen"
+    assert Settings().model == MODEL
