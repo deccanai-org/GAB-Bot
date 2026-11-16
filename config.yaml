@@ -368,6 +368,7 @@ gab_faq:
     # @mentions included.
     only_in:
       - Project GAB*
+      - project-gab-queries   # top-level channel (no category) in Deccan AI Community
     # Where the bot answers EVERY new message without being called. Empty: the bot answers only
     # when someone @mentions it (or replies to one of its messages with the ping on) in a GAB
     # channel above. To auto-answer a channel again, add it, e.g.
