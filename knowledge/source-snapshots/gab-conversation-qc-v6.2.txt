@@ -1,0 +1,62 @@
+﻿GAB Phase v6.2 – Conversation QC Checklist 
+
+Fix any minor errors in the tasks like key turn mismatches etc. To ensure proper feedback reaches the annotator please rate the task on a scale of 1 to 3.
+3 – Perfect: No issues; task meets all requirements.
+2 – Minor Issues: Minor edits required or missing artifacts.
+1 – Major Issues: Significant issues with conversation generation.
+
+
+1. Basic Checks
+If missing, send back to the SAME annotator
+* Public share links for Model A.
+* conversation.json for both models; ensure turn count matches
+* debug_info.json for Gemini; every turn must have debug info (mandatory)
+* All final artifacts uploaded as separate files (email drafts and calendar invites as PDFs)
+* Screen recording: NOT needed in Phase 6.2
+* No need to generate Model B conversation in phase 6.2
+Note: Debug info is lost if the chat page is reloaded. If it cannot be recovered, treat as a redo.
+2. Conversation Checks
+If failed, REDO with ANOTHER annotator
+* Correct models: Model A = 1p-old -> flash_1p_old_test_arm
+* Seed prompt sent exactly as Turn 1
+* Full user intent covered; "Stop when" conditions met
+* Follow-ups written in the annotator's own words and persona voice (no copied plan wording, no LLM prompts, no made-up details)
+Note: A model failing the task is acceptable; do not fail the annotator for model failures.
+3. Task Reassignment Matrix
+
+
+Situation
+	Final Question Answer
+	Action
+	Everything passes
+	Yes
+	Send for rating
+	Conversation is good, only Section 1 items missing (links, JSON, debug info, files, fields)
+	Yes
+	Reassign to SAME annotator to fix, then send for rating
+	Debug info missing and cannot be recovered
+	No
+	Reassign to SAME annotator, redo from scratch
+	Any Section 2 item fails (wrong model, intent not covered, poor or copied prompts)
+	No
+	Reassign to OTHER annotator, redo from scratch
+	
+
+Annotation Instruction Doc: GAB Instructions - Production - v6.2
+
+
+4. Addendum to the Conversation QC Guide · Using Discretion
+Conversation QC exists to catch real problems, not to enforce one reading of a task. A failed task sends the annotator back for a full redo, so a fail should rest on something objectively wrong that can be verified in the conversation. Where the evidence supports more than one reasonable reading, pause before failing and weigh the context.
+Intent wording. An intent can be read in more than one way. For example, “narrow the logic and clarity work to the COVID-19 and faculty-acceptance sentences only, leaving the rest as is” was failed as “only edit those sentences,” when the annotator’s reading was to focus the work on those points and keep the introduction, conclusion and key citations intact. If the wording supports the annotator’s reading, do not fail.
+Fail For (Send for Re-Annotation)
+•   Wrong models used (Model A: 1p-old -> flash_1p_old_test_arm)
+•   Seed prompt not sent exactly as Turn 1
+•   An ask in the user intent never raised, or the “Stop when” condition not met
+•   Follow-ups copied from plan wording or an LLM prompt, or containing made-up details
+•   Debug info lost and unrecoverable
+	Pause and Use 
+Discretion
+•   Follow-ups close in wording where each model’s reply still called for that ask
+•   Models taking different directions, with each follow-up still written against its own model’s replies
+•   Intent wording that supports more than one reasonable reading
+	Cases in the right-hand column are not automatic fails. Weigh the persona, the constraints and each model’s replies, and fail only if the task still clearly falls under the left-hand column.

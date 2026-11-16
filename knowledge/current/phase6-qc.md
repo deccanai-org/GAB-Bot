@@ -40,7 +40,7 @@ Q10. Which deliverables are required?
 For Model A only (Phase 6.2): conversation share link, complete conversation JSON, Gemini debug JSON, final model-generated artefacts, turn count, key turn and its justification, and Conversation Context for Model A. No Reset ID and no Model B work (U1-U3). Screen recording is not required (removed in Phase 6.1).
 
 Q11. Is screen recording required for current QC review?
-No screen recording is required for Phase 6.1. The screen-recording checklist in the supplied QC PDF belongs to Phase 5 and is superseded for current tasking by the dated v6.1 production update and current annotation FAQ.
+No screen recording is required for Phase 6.1, and the Phase 6.2 Conversation QC checklist says it is NOT needed in Phase 6.2 either (CQ2). The screen-recording checklist in the supplied QC PDF belongs to Phase 5 and is superseded for current tasking by the dated v6.1 production update and current annotation FAQ.
 
 Q14. Should I reject a conversation just because the debug JSON shows null?
 Not on that basis alone. The v6.1 methodology explains that broken conversations or generation failures can cause null debug. Read the Conversation Context notes and consider the reported failures, interruptions and limitations before deciding. Gemini debug submission and completeness checks are still mandatory for the annotator.
@@ -55,8 +55,8 @@ For current Phase 6.1 annotation, the form linked in the 14 Nov FAQ is https://f
 <!-- summary: checklist, check list, before approving, before rejecting, qc checklist -->
 
 Q19. Is there a checklist I should run before approving or rejecting a task?
-- Check Model A was run on 1p-old -> flash_1p_old_test_arm (Phase 6.2), the complete conversation JSON, mandatory Gemini debug and final artefacts. No Model B work or Reset ID is expected (U1-U3).
+- Phase 6.2 Conversation QC: run the basic checks (CQ2) and conversation checks (CQ3), rate the task 1-3 (CQ1) and reassign with the matrix (CQ4). Fail only for the CQ5 fail list; otherwise use discretion. The latest checklist is linked in CQ0.
 - Read the Model A Conversation Context and verify full conversation evidence before rejecting for missing public-link turns.
-- Do not require screen recordings for Phase 6.1.
+- No screen recording is needed (CQ2). No Model B work or Reset ID is expected in Phase 6.2 (U1-U3).
 - For Stage 4, verify artefact criteria and correct only affected scores; keep other scores pre-filled.
 - Write 16 evidence-based justifications and a supported seven-option SxS preference and summary. See EV16.

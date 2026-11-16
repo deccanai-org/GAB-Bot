@@ -31,5 +31,17 @@
       "sha256": "55aea4e0184b042faed48e0b16e4869ef106a8eed9744fb7f56dca7e708ea818",
       "size_bytes": 59970
     }
+  ],
+  "live_docs": [
+    {
+      "title": "GAB Conversation QC v6.2",
+      "url": "https://docs.google.com/document/d/1phCADDn4s8BJg3MKCbjl0qvpBq6I9k_sYSwRJDJCvTA/edit?usp=sharing",
+      "export_url": "https://docs.google.com/document/d/1phCADDn4s8BJg3MKCbjl0qvpBq6I9k_sYSwRJDJCvTA/export?format=txt",
+      "snapshot": "knowledge/source-snapshots/gab-conversation-qc-v6.2.txt",
+      "snapshot_taken": "2026-11-16",
+      "sha256": "2b5bf90230d7e34a26cad37e858e8a906c5f8627606fc737cfb4f9e9f6079020",
+      "faq_file": "knowledge/current/phase62-conversation-qc.md",
+      "note": "Updated iteratively by the project team. To pick up changes: download the export_url text, diff it against the snapshot, update the FAQ entries, then replace the snapshot and sha256."
+    }
   ]
 }

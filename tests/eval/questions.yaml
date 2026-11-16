@@ -48,6 +48,19 @@
   outcome: [answered]
   must_include: [Coding tasks]
 
+- id: qc62-rating
+  role: qc
+  question: How do I rate a task in Phase 6.2 Conversation QC?
+  outcome: [answered]
+  must_include: [1 to 3]
+  critical: true
+
+- id: qc62-reassign
+  role: qc
+  question: Debug info is missing and can't be recovered. Who redoes the task?
+  outcome: [answered]
+  must_include: [SAME annotator]
+
 - id: wrong-model
   role: annotator
   question: What happens if the model switches mid-conversation?

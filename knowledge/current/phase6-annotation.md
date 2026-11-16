@@ -100,4 +100,4 @@ A15. What is on the annotator pre-submission checklist?
 - Gemini debug JSON has exactly the conversation's turns; the conversation JSON includes every turn.
 - Key Turn, Key Turn Justification and Conversation Context filled for Model A only.
 - Latency issues reported; only final artefacts uploaded; drafts and invites as PDFs.
-- No screen recording is required (removed in Phase 6.1).
+- No screen recording is required (not needed in Phase 6.2).

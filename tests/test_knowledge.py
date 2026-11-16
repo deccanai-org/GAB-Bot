@@ -148,6 +148,43 @@ def test_rating_minor_issues_do_not_pull_in_the_refusal_entry(knowledge, questio
     assert "U4" not in [c.entry.id for c in evidence.candidates[:4]]
 
 
+QC_DOC_URL = "https://docs.google.com/document/d/1phCADDn4s8BJg3MKCbjl0qvpBq6I9k_sYSwRJDJCvTA/edit?usp=sharing"
+
+
+def test_phase62_conversation_qc_checklist_is_active(knowledge):
+    """GAB Conversation QC v6.2 Google Doc (copy of 16 Nov 2026)."""
+    text = knowledge.render("qc")
+    for phrase in [
+        QC_DOC_URL,
+        "rate the task on a scale of 1 to 3",
+        "send the task back to the SAME annotator",
+        "REDONE by ANOTHER annotator",
+        "do not fail the annotator for model failures",
+        "Screen recording: NOT needed in Phase 6.2",
+        "do not check or reject any tasks related to Model B Conversation Generation",
+    ]:
+        assert phrase in text
+    # The doc's "conversation.json for both models" line must not become a Model B requirement.
+    assert "conversation.json for both models" not in text
+
+
+@pytest.mark.parametrize(
+    "question,expected",
+    [
+        ("how do I rate a task in conversation QC?", "CQ1"),
+        ("what are the basic checks in 6.2 QC?", "CQ2"),
+        ("debug info is missing and can't be recovered, who redoes the task?", "CQ4"),
+        ("the annotator read the intent differently from me, should I fail?", "CQ6"),
+        ("where is the latest QC checklist doc?", "CQ0"),
+        ("when should I fail a task vs use discretion?", "CQ5"),
+        ("should I reject model B tasks in QC?", "CQ7"),
+    ],
+)
+def test_phase62_qc_questions_reach_their_entries(knowledge, question, expected):
+    evidence = LocalRetriever(knowledge).retrieve(question, "qc")
+    assert evidence.candidates and evidence.candidates[0].entry.id == expected
+
+
 def test_every_document_has_valid_header(knowledge):
     for doc in knowledge.documents:
         assert doc.audience in {"annotator", "qc", "qm", "all"}
