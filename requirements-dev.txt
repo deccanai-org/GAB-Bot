@@ -3,3 +3,4 @@ pytest==9.2.0
 ruff==0.17.5
 pip-audit==2.10.1
 pytest-cov==7.1.0
+setuptools>=84.1.0  # CI audit: past PYSEC-2026-3447 / GHSA-xmj3-9gf7-h52w in the runner's bundled copy
