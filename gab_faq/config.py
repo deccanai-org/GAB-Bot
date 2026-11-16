@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -77,19 +78,40 @@ def load_environment() -> None:
 
 def _names(values) -> frozenset[str]:
     """Channel names or IDs from config.yaml, compared without case and without a leading #."""
-    return frozenset(str(v).strip().lstrip("#").lower() for v in (values or []) if str(v).strip())
+    return frozenset(_channel_key(v) for v in (values or []) if str(v).strip())
+
+
+def _channel_key(value) -> str:
+    return str(value).strip().lstrip("#").lower()
+
+
+def channel_pattern_matches(pattern: str, key: str) -> bool:
+    """`*` matches any run of characters (none included); every other character is literal, so
+    names with [ ] ? in them still match exactly. Both sides are already lower-cased keys."""
+    if "*" not in pattern:
+        return pattern == key
+    regex = ".*".join(re.escape(part) for part in pattern.split("*"))
+    return re.fullmatch(regex, key, flags=re.DOTALL) is not None
+
+
+def _matches(patterns: frozenset[str], channels) -> bool:
+    keys = [_channel_key(c) for c in channels if c]
+    return any(channel_pattern_matches(p, k) for p in patterns for k in keys)
 
 
 @dataclass(frozen=True)
 class PlatformSettings:
     """Where the bot answers, and how it treats each channel, on one platform.
 
-    Every list below can hold, in any mix (compared without case or a leading #):
+    Every list below can hold any number of entries, in any mix (compared without case or a
+    leading #):
       - a channel name:                  project-related-queries
       - a category (section) name:       Project GAB P6 QC Deployed   (= every channel in it)
       - a category/channel pair:         Project GAB P6 QC Deployed/support   (one exact channel)
       - a channel or category ID:        1570402201296175157
-    Slack has no categories: use channel IDs there."""
+      - a pattern with * wildcards:      Project GAB*/project-related-queries  (every match,
+                                         including channels and sections created later)
+    "*" alone means every channel. Slack has no categories: use channel IDs there."""
 
     # Limit the bot to these channels/categories: outside them it ignores everything, @mentions
     # included. Empty = anywhere. Useful on a server shared with other projects.
@@ -116,22 +138,25 @@ class PlatformSettings:
         for channel in channels:
             if not channel:
                 continue
-            key = str(channel).lstrip("#").lower()
-            if key in self.qm_channels:
+            if _matches(self.qm_channels, [channel]):
                 return "qm"
-            if key in self.qc_channels:
+            if _matches(self.qc_channels, [channel]):
                 return "qc"
-            if key in self.annotator_channels:
+            if _matches(self.annotator_channels, [channel]):
                 return "annotator"
         return "unknown"
 
     def is_answer_channel(self, *channels: str | None) -> bool:
-        return any(c and str(c).lstrip("#").lower() in self.answer_channels for c in channels)
+        return _matches(self.answer_channels, channels)
 
     def in_scope(self, *channels: str | None) -> bool:
         if not self.only_in:
             return True
-        return any(c and str(c).lstrip("#").lower() in self.only_in for c in channels)
+        return _matches(self.only_in, channels)
+
+    def unmatched_answer_channels(self, keys) -> list[str]:
+        """answer_channels entries that match none of these channel keys (a startup check)."""
+        return sorted(p for p in self.answer_channels if not _matches(frozenset([p]), keys))
 
 
 def _platform(section: dict | None) -> PlatformSettings:

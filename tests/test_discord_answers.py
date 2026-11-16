@@ -98,12 +98,13 @@ class FakeAuthor:
 
 
 class FakeMessage:
-    def __init__(self, content, channel, guild, mentions=()):
+    def __init__(self, content, channel, guild, mentions=(), role_mentions=()):
         self.id = 1
         self.content = content
         self.channel = channel
         self.guild = guild
         self.mentions = list(mentions)
+        self.role_mentions = list(role_mentions)
         self.author = FakeAuthor()
         self.reference = None
         self.jump_url = f"https://discord.com/channels/1/{channel.id}/1"
@@ -206,6 +207,32 @@ def test_ignores_other_channels_unless_mentioned(tmp_path):
     msg = FakeMessage("<@999> which model?", ch.qc, guild, mentions=[BOT_USER])
     assert run(answerer.handle(msg)) is True
     assert brain.calls == [("which model?", "qc")]  # mention removed, role from channel name
+
+
+def test_every_way_of_typing_at_gigi_calls_the_bot(tmp_path):
+    brain = FakeBrain()
+    answerer, guild, ch = make(tmp_path, brain)
+    guild.self_role = SimpleNamespace(id=555)  # the role Discord creates for the bot
+    guild.me = SimpleNamespace(nick="Gigi")  # the bot's nickname in this server
+    calls = [
+        FakeMessage("<@&555> which model?", ch.qc, guild, role_mentions=[guild.self_role]),
+        FakeMessage("@gigi which model?", ch.qc, guild),  # sent without picking autocomplete
+        FakeMessage("which model? @GIGI", ch.qc, guild),
+        FakeMessage("@faq-bot, which model?", ch.qc, guild),  # the account name works too
+    ]
+    for msg in calls:
+        assert run(answerer.handle(msg)) is True
+    assert [question for question, _ in brain.calls] == ["which model?"] * 4  # @... removed
+
+    not_calls = [
+        FakeMessage("mail sam@gigi.com about the deadline", ch.qc, guild),
+        FakeMessage("ask @gigiteam about it", ch.qc, guild),
+        FakeMessage("<@&777> which model?", ch.qc, guild, role_mentions=[SimpleNamespace(id=777)]),
+        FakeMessage("gigi which model?", ch.qc, guild),  # no @
+    ]
+    for msg in not_calls:
+        assert run(answerer.handle(msg)) is False
+    assert len(brain.calls) == 4
 
 
 def test_unanswered_question_posted_for_the_team(tmp_path):
@@ -340,7 +367,7 @@ def test_empty_mention_gets_greeting(tmp_path):
     answerer, guild, ch = make(tmp_path, brain)
     msg = FakeMessage("<@999>", ch.general, guild, mentions=[BOT_USER])
     run(answerer.handle(msg))
-    assert "Just ask your question" in msg.replies[0]
+    assert "Mention me with your question" in msg.replies[0]
     assert brain.calls == []
 
 

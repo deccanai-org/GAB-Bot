@@ -116,6 +116,47 @@ def test_only_in():
     assert _platform({}).in_scope("anything")  # empty = anywhere
 
 
+def test_channel_patterns_cover_any_number_of_channels():
+    s = _platform(
+        {
+            "only_in": ["Project GAB*"],
+            "answer_channels": ["Project GAB*/project-related-queries", "ask-*"],
+            "annotator_channels": ["Project GAB* Annotators*"],
+            "qc_channels": ["Project GAB* QC*"],
+        }
+    )
+    for phase in ("P6", "P7", "P12"):  # sections created later need no config edit
+        annotators, qc = (
+            f"Project GAB {phase} Annotators Deployed",
+            f"Project GAB {phase} QC Deployed",
+        )
+        assert s.in_scope("support", "1", annotators)
+        assert s.is_answer_channel("project-related-queries", f"{qc}/project-related-queries")
+        assert s.role_for_channel("support", "1", annotators) == "annotator"
+        assert s.role_for_channel("support", "1", qc) == "qc"
+    assert s.is_answer_channel("Ask-Gigi") and s.is_answer_channel("ask-payments")
+    assert not s.is_answer_channel("support", "Project GAB P6 QC Deployed/support")
+    assert not s.is_answer_channel("project-related-queries", "Maitrix/project-related-queries")
+    assert not s.in_scope("coders-maitrix", "Project Maitrix")
+    assert s.role_for_channel("Project Maitrix") == "unknown"
+    assert _platform({"answer_channels": ["*"]}).is_answer_channel("anything")
+
+
+def test_channel_patterns_treat_other_characters_literally():
+    s = _platform({"answer_channels": ["help [gab]?", "team.*"]})
+    assert s.is_answer_channel("help [gab]?")
+    assert not s.is_answer_channel("help g?")  # [ ] ? are not wildcards
+    assert s.is_answer_channel("team.leads")
+    assert not s.is_answer_channel("teamxleads")  # . is literal
+
+
+def test_startup_check_reports_patterns_that_match_no_channel():
+    s = _platform({"answer_channels": ["Project GAB*/project-related-queries", "ask-gigi"]})
+    keys = ["project-related-queries", "Project GAB P6 QC Deployed/project-related-queries"]
+    assert s.unmatched_answer_channels(keys) == ["ask-gigi"]
+    assert s.unmatched_answer_channels([*keys, "ask-gigi"]) == []
+
+
 def test_discord_strip_mentions():
     assert discord_answers.strip_mentions("<@123> hi <@!123>", 123) == "hi"
 

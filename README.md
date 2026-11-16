@@ -55,8 +55,10 @@ the project moves to a new phase. Optional top-level `output_dir` defaults to
 `output`.
 
 FAQ answering uses `gab_faq.discord.only_in`, `answer_channels`, and the role
-channel lists. It answers new messages in configured answer channels and scoped
-mentions elsewhere. Direct-message answering is controlled separately. Thread
+channel lists. Each list takes any number of channel names, category names,
+`Category/channel` pairs, IDs, or `*` patterns (`Project GAB*/project-related-queries`
+covers that channel in every GAB section, including later phases). It answers
+new messages in configured answer channels and scoped mentions elsewhere. Direct-message answering is controlled separately. Thread
 follow-ups stop when another person takes over. QM documents are available only
 in configured QM channels.
 

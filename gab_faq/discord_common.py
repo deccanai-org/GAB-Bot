@@ -78,8 +78,50 @@ async def notify_contact(client, channel, contact, *, embed, card=None, intro: s
         log.exception("[FAQ] Couldn't ping the contact in the staff channel either")
 
 
-def strip_mentions(text: str, bot_id: int) -> str:
-    return re.sub(rf"<@!?{bot_id}>", "", text or "").strip()
+def strip_mentions(text: str, bot_id: int, role_id: int | None = None, names=()) -> str:
+    """The message without the ways of calling the bot: <@bot>, <@&bot's role>, "@name" typed."""
+    text = re.sub(rf"<@!?{bot_id}>", "", text or "")
+    if role_id is not None:
+        text = re.sub(rf"<@&{role_id}>", "", text)
+    for name in names:
+        text = _typed_call(name).sub("", text)
+    return text.strip()
+
+
+def _typed_call(name: str) -> re.Pattern:
+    # "@gigi" typed as text, any case; not part of an e-mail address or a longer name. A comma or
+    # colon right after it ("@gigi, ...") goes with it.
+    return re.compile(rf"(?<![\w@])@{re.escape(name)}(?![\w-])[,:]?", re.IGNORECASE)
+
+
+def bot_names(bot_user, guild=None) -> list[str]:
+    """Names people type after @ to call the bot: its username, display name and server nick."""
+    names = {getattr(bot_user, "name", None), getattr(bot_user, "global_name", None)}
+    names.add(getattr(getattr(guild, "me", None), "nick", None))
+    return sorted(name for name in names if name)
+
+
+def bot_role_id(guild) -> int | None:
+    """The role Discord creates for the bot in a server; "@gigi" autocomplete offers it too."""
+    return getattr(getattr(guild, "self_role", None), "id", None)
+
+
+def calls_bot(message, bot_user) -> bool:
+    """True when the message calls the bot with @: a real mention, a mention of the bot's own
+    server role, or "@name" typed as plain text (sent without picking the autocomplete entry)."""
+    if bot_user in message.mentions:
+        return True
+    role_id = bot_role_id(message.guild)
+    if role_id is not None and any(
+        getattr(role, "id", None) == role_id for role in getattr(message, "role_mentions", ())
+    ):
+        return True
+    content = message.content or ""
+    return any(_typed_call(name).search(content) for name in bot_names(bot_user, message.guild))
+
+
+def strip_bot_call(text: str, bot_user, guild=None) -> str:
+    return strip_mentions(text, bot_user.id, bot_role_id(guild), bot_names(bot_user, guild))
 
 
 def _keys(channel, channel_id=None) -> list[str]:

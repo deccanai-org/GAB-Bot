@@ -127,7 +127,7 @@ PAYMENT_REPLY = (
 THANKS_REPLY = "You're welcome! Ask me anything else about the GAB project."
 GREETING_REPLY = (
     "Hi! I answer questions from the GAB project FAQ: models, screen recording, debug JSON, "
-    "turns, QC checks and so on. Just ask your question."
+    "turns, QC checks and so on. Mention me with your question."
 )
 
 

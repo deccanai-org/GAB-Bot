@@ -13,12 +13,14 @@ from .config import Settings, load_environment, load_settings
 from .contracts import HELPFUL_OUTCOMES, Answer
 from .discord_common import (
     allowed_mentions,
+    calls_bot,
     channel_keys,
     find_text_channel,
     notify_contact,
-    strip_mentions,
+    strip_bot_call,
 )
 from .discord_common import readable_channels as readable_channels
+from .discord_common import strip_mentions as strip_mentions
 from .engine import build_engine, describe
 from .followup import Followup, card_footer
 from .knowledge import KnowledgeBase
@@ -33,8 +35,9 @@ log = logging.getLogger(__name__)
 DISCORD_LIMIT = 2000
 GREETING = (
     "Hi! I answer questions about the GAB project's FAQ: model selection, screen recording, debug "
-    "JSON, turn counts, QC checks and so on. Just ask your question. To ask for a higher task limit "
-    "use /throttle-request, and to report a problem with a task use /task-issue."
+    "JSON, turn counts, QC checks and so on. Mention me with your question, e.g. "
+    '"@Gigi which model do I use?". To ask for a higher task limit use /throttle-request, and to '
+    "report a problem with a task use /task-issue."
 )
 FIELD_LIMIT = 1024  # Discord's limit for one embed field
 
@@ -136,7 +139,7 @@ class FaqAnswerer:
         platform = self.settings.discord
         decision = route(
             is_dm=message.guild is None,
-            mentioned=self.bot.user in message.mentions,
+            mentioned=calls_bot(message, self.bot.user),
             in_answer_channel=not is_thread and platform.is_answer_channel(*own),
             in_answer_thread=is_thread and platform.is_answer_channel(*parent),
             answer_in_dms=platform.answer_in_dms,
@@ -149,7 +152,7 @@ class FaqAnswerer:
             if not last or last[0].author != self.bot.user:
                 return False  # a person is handling this thread
 
-        question = strip_mentions(message.content, self.bot.user.id)
+        question = strip_bot_call(message.content, self.bot.user, message.guild)
         if not question:
             await message.reply(GREETING, allowed_mentions=allowed_mentions())
             return True
@@ -295,7 +298,7 @@ class FaqAnswerer:
         return [
             {
                 "role": "assistant" if m.author == self.bot.user else "user",
-                "content": strip_mentions(m.content, self.bot.user.id),
+                "content": strip_bot_call(m.content, self.bot.user, message.guild),
             }
             for m in earlier
         ]
@@ -310,7 +313,9 @@ class FaqAnswerer:
         "Didn't help? Ask a person")."""
         own, parent = channel_keys(question_message.channel)
         role = self.settings.discord.role_for_channel(*own, *parent)
-        question = redact_secrets(strip_mentions(question_message.content, self.bot.user.id))
+        question = redact_secrets(
+            strip_bot_call(question_message.content, self.bot.user, question_message.guild)
+        )
         answer = Answer(bot_reply, "needs_human", escalation_reason=reason)
         self._ensure_route(answer, question)
         delivered = await self._post_unanswered(question_message, question, role, answer)
