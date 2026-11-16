@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gab-bot-dev
+  name: gab-bot-prod
   namespace: gab-bot
 spec:
   replicas: 1
@@ -9,19 +9,19 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: gab-bot-dev
+      app: gab-bot-prod
   template:
     metadata:
       labels:
-        app: gab-bot-dev
+        app: gab-bot-prod
       annotations:
         prometheus.io/scrape: 'true'
         prometheus.io/port: '8080'
         prometheus.io/path: /metrics
     spec:
       containers:
-      - name: gab-bot-dev
-        image: 874846752452.dkr.ecr.ap-south-1.amazonaws.com/gab-bot-dev:release-required
+      - name: gab-bot-prod
+        image: 874846752452.dkr.ecr.ap-south-1.amazonaws.com/gab-bot-prod:release-required
         command:
         - python
         - bot.py
@@ -81,10 +81,10 @@ spec:
       volumes:
       - name: secrets
         secret:
-          secretName: gab-bot-dev
+          secretName: gab-bot-prod
       - name: output
         persistentVolumeClaim:
-          claimName: gab-bot-output-dev
+          claimName: gab-bot-output-prod
       - name: tmp
         emptyDir:
           sizeLimit: 256Mi

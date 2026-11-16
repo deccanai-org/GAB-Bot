@@ -1,17 +1,17 @@
 // Builds the GAB FAQ Discord bot, pushes it to ECR and deploys it to the
-// soulhq-dev EKS cluster (namespace gab-bot). Same flow as projectmgmtsvc and
+// prod-cluster EKS cluster (namespace gab-bot). Same flow as projectmgmtsvc and
 // campaign-module: Deploy / Rollback / Restart, image tag = Jenkins build number.
 //
 // The bot holds one Discord gateway connection, so it runs as exactly one pod
 // with a Recreate rollout. The deployment pins the image by registry digest,
-// as k8s-manifests/dev/deployment.yaml expects (its template tag is
+// as k8s-manifests/prod/deployment.yaml expects (its template tag is
 // deliberately unusable: release-required).
 pipeline {
     agent { label 'backend' }
 
     parameters {
         string(name: 'BRANCH', defaultValue: 'main', description: 'Branch to build')
-        choice(name: 'ENVIRONMENT', choices: ['dev'], description: 'Environment to deploy')
+        choice(name: 'ENVIRONMENT', choices: ['prod'], description: 'Environment to deploy')
         choice(name: 'ACTION', choices: ['Deploy', 'Rollback', 'Restart'], description: 'Select the action to perform')
         string(name: 'ROLLBACK_VERSION', defaultValue: '', description: 'Image tag (Jenkins build number) to roll back to; only used if ACTION is Rollback')
     }
@@ -90,7 +90,7 @@ pipeline {
             when { expression { params.ACTION == 'Deploy' } }
             steps {
                 script {
-                    withDevCluster {
+                    withProdCluster {
                         sh '''
                             set -e
                             kubectl apply -f "$MANIFEST_DIR/secret.yaml"
@@ -108,7 +108,7 @@ pipeline {
             when { expression { params.ACTION == 'Deploy' } }
             steps {
                 script {
-                    withDevCluster {
+                    withProdCluster {
                         // The startup probe allows up to 10 minutes for the gateway,
                         // command sync and FAQ engine to become ready.
                         def status = sh(
@@ -137,7 +137,7 @@ pipeline {
                     if (!params.ROLLBACK_VERSION?.trim()) {
                         error 'No rollback version specified.'
                     }
-                    withDevCluster {
+                    withProdCluster {
                         sh """
                             kubectl set image deployment/${env.DEPLOYMENT} ${env.DEPLOYMENT}=${env.ECR_URI}/${env.ECR_REPO}:${params.ROLLBACK_VERSION.trim()} -n ${env.NAMESPACE} &&
                             kubectl rollout status deployment/${env.DEPLOYMENT} -n ${env.NAMESPACE} --timeout=12m
@@ -151,7 +151,7 @@ pipeline {
             when { expression { params.ACTION == 'Restart' } }
             steps {
                 script {
-                    withDevCluster {
+                    withProdCluster {
                         sh '''
                             kubectl rollout restart deployment/"$DEPLOYMENT" -n "$NAMESPACE" &&
                             kubectl rollout status deployment/"$DEPLOYMENT" -n "$NAMESPACE" --timeout=12m
@@ -175,15 +175,15 @@ pipeline {
     }
 }
 
-def withDevCluster(Closure body) {
+def withProdCluster(Closure body) {
     withKubeConfig(
         caCertificate: '',
-        clusterName: 'soulhq-dev',
-        contextName: 'soulhq-dev',
-        credentialsId: 'dev-k8s-token',
+        clusterName: 'prod-cluster',
+        contextName: 'prod-cluster',
+        credentialsId: 'prod-k8s-token',
         namespace: '',
         restrictKubeConfigAccess: false,
-        serverUrl: 'https://CB4DAAEF4A55F50A184966A81A3F075D.gr7.ap-south-1.eks.amazonaws.com'
+        serverUrl: 'https://DBA93E67CDCA7C597468BEFA56D7CA0F.gr7.ap-south-1.eks.amazonaws.com'
     ) {
         body()
     }

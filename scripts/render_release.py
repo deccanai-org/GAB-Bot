@@ -15,7 +15,7 @@ def render(image: str) -> dict:
         raise ValueError(
             "Use the registry digest of an image that passed CI: repository@sha256:..."
         )
-    deployment = yaml.safe_load((ROOT / "k8s-manifests/dev/deployment.yaml").read_text())
+    deployment = yaml.safe_load((ROOT / "k8s-manifests/prod/deployment.yaml").read_text())
     deployment = copy.deepcopy(deployment)
     container = deployment["spec"]["template"]["spec"]["containers"][0]
     container["image"] = image

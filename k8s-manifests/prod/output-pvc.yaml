@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: gab-bot-output-dev
+  name: gab-bot-output-prod
   namespace: gab-bot
 spec:
   accessModes:
