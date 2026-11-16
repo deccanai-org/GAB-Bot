@@ -801,13 +801,13 @@ def test_outbound_payload_has_exactly_the_documented_fields(knowledge):
     assert all(f"`{key}`" in doc for key in request)
 
 
-def test_budgets_default_to_2000_input_and_300_output_tokens(knowledge):
+def test_config_budgets_allow_2000_input_and_1024_final_output_tokens(knowledge):
     limits = SETTINGS.model_limits
-    assert limits.max_input_tokens == 2000 and limits.max_output_tokens == 300
+    assert limits.max_input_tokens == 2000 and limits.max_output_tokens == 1024
     request, entries = bot(knowledge, limits=limits).build_request(
         "Should QC reject a task with null debug JSON after a broken conversation?", "qc"
     )
-    assert estimated_input_tokens(request) <= 2000 and request["max_tokens"] == 300
+    assert estimated_input_tokens(request) <= 2000 and request["max_tokens"] == 1024
     assert len(entries) >= 2  # several complete entries fit for multi-entry reasoning
 
 

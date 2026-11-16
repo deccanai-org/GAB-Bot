@@ -34,9 +34,9 @@ fails if a field is added or removed without updating this page.
 | --- | --- |
 | `model` | `qwen3-omni-flash` |
 | `messages` | See below. |
-| `max_tokens` | `model_limits.max_output_tokens` (300) |
+| `max_tokens` | `model_limits.max_output_tokens` (1,024) |
 | `temperature` | `0` |
-| `enable_thinking` | `false` |
+| `enable_thinking` | `gab_faq.enable_thinking` (`true` in the project configuration) |
 | `modalities` | `["text"]` |
 | `stream` | `true` |
 | `stream_options` | `{"include_usage": true}` (token counts for cost accounting) |
@@ -67,6 +67,20 @@ No `tools`, `tool_choice`, `functions`, `response_format`, files, audio or image
 - Queue-manager (QM) documents or sections, unless the asker is in a configured QM channel.
 - FAQ entries without `external_processing_approved: true`, archived or superseded entries.
 - Other users' messages.
+
+## Thinking output
+
+Qwen3-Omni-Flash streams reasoning separately in `reasoning_content`. When thinking is enabled,
+the bot accepts and discards that field, with a cumulative 16 KiB bound per response. Reasoning
+is never parsed as an answer, stored in conversation history, logged, or sent to Discord/Slack.
+The final `content` still has to contain a complete, validated JSON answer. Incomplete final
+answers, tools and audio are rejected. The request deadline is 35 seconds.
+
+Reasoning is billed by Alibaba. Shared provider quota reservations include its estimated
+allowance (16 KiB / 3, like the input-token estimate); actual completion usage includes thinking.
+No new category of input data is sent when thinking is enabled.
+
+See [Alibaba's thinking-mode documentation](https://www.alibabacloud.com/help/en/model-studio/qwen-omni).
 
 ## Size and rate bounds
 

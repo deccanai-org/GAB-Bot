@@ -46,6 +46,7 @@ def qwen_status(settings) -> list[str]:
         f"  questions sent to Qwen:     {settings.external_questions_approved}"
         + ("" if settings.external_questions_approved else "  (off: GAB questions go to people)"),
         f"  thread history sent:        {settings.external_history_approved}",
+        f"  thinking enabled:           {settings.enable_thinking}",
         f"  DASHSCOPE_API_KEY set:      {bool(key)}"
         + (f" (starts with sk-: {key.startswith('sk-')})" if key else ""),
         f"  budget:                     ~{settings.model_limits.max_input_tokens} input / "

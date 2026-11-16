@@ -275,6 +275,7 @@ class Settings:
     local_backstop: bool = True
     external_questions_approved: bool = False
     external_history_approved: bool = False
+    enable_thinking: bool = False
     provider_usage_path: Path = PROJECT_ROOT / "output" / "provider_usage.sqlite3"
     followup: FollowupSettings = field(default_factory=FollowupSettings)
     # Contacts, /throttle-request and /task-issue (routing.py, support.py).
@@ -297,6 +298,8 @@ class Settings:
             raise ValueError(f"engine must be one of {ENGINES}")
         if self.engine == "qwen" and self.model != QWEN_MODEL:
             raise ValueError(f"gab_faq.model must be {QWEN_MODEL!r} for the qwen engine")
+        if type(self.enable_thinking) is not bool:
+            raise ValueError("gab_faq.enable_thinking must be true or false")
         if not 0 <= self.max_history_messages <= 50:
             raise ValueError("max_history_messages must be between 0 and 50")
 
@@ -328,6 +331,7 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         local_backstop=bool(faq.get("local_backstop", True)),
         external_questions_approved=faq.get("external_questions_approved") is True,
         external_history_approved=faq.get("external_history_approved") is True,
+        enable_thinking=faq.get("enable_thinking", False),
         provider_usage_path=Path(
             os.environ.get("GAB_PROVIDER_USAGE_PATH")
             or faq.get("provider_usage_path")

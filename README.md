@@ -117,8 +117,11 @@ greetings and requests routed directly to staff do not. Questions are limited to
 answers to 6,000 characters. Longer answers escalate instead of being cut off.
 Qwen requests have an 8,000-byte serialized UTF-8 cap, including question, history,
 FAQ excerpts and request options. This is a byte limit, not a tokenizer count.
-Model output is capped at 256 tokens, thinking is disabled, and only text mode is
-requested. The longer predefined FAQ reply is rendered locally. Provider errors
+Final model output is capped at 1,024 tokens and only text mode is requested.
+`gab_faq.enable_thinking: true` enables Alibaba thinking; set it to `false` to disable it.
+Reasoning chunks are discarded, never posted or logged, and bounded to 16 KiB per response.
+Only the final JSON answer is validated and rendered. Thinking adds latency and billed tokens;
+provider quota reservations include an estimate for that reasoning allowance. Provider errors
 consume an attempt so retries cannot bypass the per-user cap.
 
 ## Exports and privacy

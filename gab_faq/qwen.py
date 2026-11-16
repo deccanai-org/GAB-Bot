@@ -63,6 +63,9 @@ from .retrieval import LocalRetriever, is_gab_question, targeted_query
 log = logging.getLogger(__name__)
 ENDPOINT = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
 MODEL = QWEN_MODEL
+# Reasoning is discarded, bounded separately from the final JSON reply.
+MAX_REASONING_BYTES = 16384
+REQUEST_DEADLINE = 35
 ERROR_MESSAGE = "I couldn't complete the FAQ lookup. A team member can help with this question."
 BUSY_MESSAGE = "The FAQ assistant is very busy right now. Please ask again in about a minute."
 DISABLED_MESSAGE = "I can't interpret this question automatically yet, so a team member will help."
@@ -74,8 +77,7 @@ NO_ENTRIES_NOTE = (
     "(No current FAQ entry matched. Do not state GAB policy: give labelled general guidance, ask "
     "a clarification, or use needs_human. No further search is available.)"
 )
-# Longest a question waits for a provider slot. Stays well inside the 25 s streaming deadline plus
-# the 45 s answer deadline in config.yaml (runtime.answer_timeout).
+# The provider-slot wait plus the 35 s request deadline fits the 45 s adapter deadline.
 PACING_WAIT = 10.0
 # Kept for configuration compatibility: Qwen no longer replaces a decline with an embedding match.
 BACKSTOP_OUTCOMES = frozenset({"not_in_faq", "error"})
@@ -186,6 +188,7 @@ class Qwen:
         quota_path=None,
         external_questions_approved=False,
         external_history_approved=False,
+        enable_thinking=False,
         local_answers=True,
         sleep=time.sleep,
     ):
@@ -197,6 +200,9 @@ class Qwen:
         self.gate = gate or SharedProviderQuota(self.limits, quota_path)
         self.external_questions_approved = external_questions_approved
         self.external_history_approved = external_history_approved
+        if type(enable_thinking) is not bool:
+            raise ValueError("enable_thinking must be true or false")
+        self.enable_thinking = enable_thinking
         self.local_answers = local_answers
         self.sleep = sleep
         # Retained attribute: the embedding backstop is no longer consulted by Qwen (see
@@ -241,7 +247,7 @@ class Qwen:
                     ],
                     "max_tokens": self.limits.max_output_tokens,
                     "temperature": 0,  # the same question should select the same entries
-                    "enable_thinking": False,
+                    "enable_thinking": self.enable_thinking,
                     "modalities": ["text"],
                     "stream": True,
                     "stream_options": {"include_usage": True},
@@ -278,6 +284,11 @@ class Qwen:
             return Answer(INSTRUCTION_REPLY, "declined", via="qwen: instruction override")
         if is_live_task_help(question):
             return Answer(LIVE_TASK_REPLY, "declined", via="qwen: live task help")
+        from .introduction import introduction
+
+        intro = introduction(question, self.knowledge, role)
+        if intro is not None:
+            return intro
         unavailable = self._model_unavailable()
         evidence = None
         if self.local_answers:
@@ -401,7 +412,11 @@ class Qwen:
             if state.get("calls", 0) >= self.limits.provider_calls_per_question:
                 raise ValueError("Per-question provider call budget exhausted")
             reservation = (
-                self.gate.reserve(estimated_input_tokens(request) + self.limits.max_output_tokens)
+                self.gate.reserve(
+                    estimated_input_tokens(request)
+                    + self.limits.max_output_tokens
+                    + ((MAX_REASONING_BYTES + 2) // 3 if self.enable_thinking else 0)
+                )
                 if hasattr(self.gate, "reserve")
                 else self.gate.acquire()
             )
@@ -416,7 +431,7 @@ class Qwen:
                     if self.client is not None
                     else httpx.Client(verify=ssl.create_default_context())
                 )
-                remaining = 25 - (time.monotonic() - started)
+                remaining = REQUEST_DEADLINE - (time.monotonic() - started)
                 if remaining <= 0:
                     raise ValueError("Request deadline exceeded")
                 state["sent"] = True
@@ -453,7 +468,7 @@ class Qwen:
                 if hasattr(self.gate, "finish"):
                     self.gate.finish(reservation, state.get("usage"), status)
             if delay is not None:
-                if time.monotonic() - started + delay >= 25:
+                if time.monotonic() - started + delay >= REQUEST_DEADLINE:
                     raise ValueError("Retry deadline exceeded")
                 self.sleep(delay)
 
@@ -502,14 +517,14 @@ class Qwen:
                 "The model API key is not configured. Please contact the team.", "error", via="qwen"
             )
         chunks, finish, usage = [], None, None
-        length, started = 0, time.monotonic()
+        length, reasoning_length, started = 0, 0, time.monotonic()
         try:
             # No redirects, automatic provider fallback, tools or media uploads.
             # Include system-trusted roots (including Windows) while verifying TLS and hostname.
             with self._response(request, key, state) as response:
                 response.raise_for_status()
                 for line in response.iter_lines():
-                    if time.monotonic() - started > 25:
+                    if time.monotonic() - started > REQUEST_DEADLINE:
                         raise ValueError("Streaming deadline exceeded")
                     if not line.startswith("data:"):
                         continue
@@ -526,12 +541,18 @@ class Qwen:
                         if choice.get("index", 0) != 0:
                             continue
                         delta = choice.get("delta", {})
-                        if (
-                            delta.get("tool_calls")
-                            or delta.get("reasoning_content")
-                            or delta.get("audio")
-                        ):
+                        if delta.get("tool_calls") or delta.get("audio"):
                             raise ValueError("Unexpected non-text model output")
+                        reasoning = delta.get("reasoning_content")
+                        if reasoning is not None:
+                            if not isinstance(reasoning, str):
+                                raise ValueError("Invalid reasoning delta")
+                            if reasoning and not self.enable_thinking:
+                                raise ValueError("Unexpected reasoning while thinking is disabled")
+                            reasoning_length += len(reasoning.encode("utf-8"))
+                            if reasoning_length > MAX_REASONING_BYTES:
+                                raise ValueError("Model reasoning exceeded the response size bound")
+                        # Only final content is parsed, logged or published. Reasoning is discarded.
                         piece = delta.get("content") or ""
                         if not isinstance(piece, str):
                             raise ValueError("Invalid text delta")

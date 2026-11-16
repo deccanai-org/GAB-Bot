@@ -184,6 +184,12 @@ class GuardedEngine:
         if is_live_task_help(q):
             return Answer(LIVE_TASK_REPLY, "declined", via="guard: live task help")
 
+        from .introduction import introduction
+
+        intro = introduction(q, getattr(self.inner, "knowledge", None), role)
+        if intro is not None:
+            return self.check_output(intro, q)
+
         if self.quota is not None:
             from .search import GREETING_REPLY, THANKS_REPLY, THANKS_WORDS, WORD_RE, is_small_talk
 
