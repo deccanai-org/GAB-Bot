@@ -67,6 +67,17 @@ checking the default role alone cannot prove every role assignment is private.
 
 ## Deploy and roll back
 
+Jenkins (`Jenkinsfile`, agent `backend`) runs the standard flow used by the other
+services: build, offline image smoke test, push to ECR `gab-bot-dev` tagged with the
+build number, then apply `k8s-manifests/dev/` to the `soulhq-dev` EKS cluster in
+namespace `gab-bot`, pinning the image by digest. A rollout that is not ready within
+12 minutes is undone automatically. `ACTION=Rollback` takes a previous build number;
+`ACTION=Restart` restarts the pod. Secrets come from AWS Secrets Manager `dev/gab-bot`
+(`DISCORD_TOKEN`, `DASHSCOPE_API_KEY`) through the `gab-bot-dev` ExternalSecret.
+The job checks out GitHub with the Jenkins credential `github-gab-bot`.
+
+The manual steps below describe the same release by hand.
+
 1. Save and verify current state before replacing an existing pod. Old emptyDir
    data must be copied out first; PVC configuration does not migrate it.
 2. Provision `k8s-manifests/dev/output-pvc.yaml` with the cluster's StorageClass.
