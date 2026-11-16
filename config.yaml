@@ -358,27 +358,28 @@ gab_faq:
     max_history_message_chars: 400
 
   discord:
-    # Each list can hold channel names, category (section) names, "Category/channel" pairs,
-    # or IDs. A category means every channel in it. Threads follow their parent channel.
-    # NEW PHASE: the GAB section names change with each phase (e.g. P6 -> P7); update them below.
+    # Each list takes any number of entries: channel names, category (section) names,
+    # "Category/channel" pairs, IDs, or patterns with * (any run of characters). A category means
+    # every channel in it; a pattern covers every match, including channels and sections created
+    # later (a new phase's "Project GAB P7 ..." sections need no edit). Threads follow their parent
+    # channel. Add more lines to add more channels.
 
     # The server has other projects too: outside these sections the bot ignores everything,
     # @mentions included.
     only_in:
-      - Project GAB P6 Annotators Deployed
-      - Project GAB P6 QC Deployed
-    # Where the bot answers EVERY new message. In the other GAB channels (e.g. support) it
-    # answers only when someone @mentions it.
-    answer_channels:
-      - Project GAB P6 Annotators Deployed/project-related-queries
-      - Project GAB P6 QC Deployed/project-related-queries
+      - Project GAB*
+    # Where the bot answers EVERY new message without being called. Empty: the bot answers only
+    # when someone @mentions it (or replies to one of its messages with the ping on) in a GAB
+    # channel above. To auto-answer a channel again, add it, e.g.
+    # "Project GAB*/project-related-queries".
+    answer_channels: []
     # Off: in a DM the bot can't tell which project or role the person is in.
     answer_in_dms: false
     # Which FAQ to use. The two sections have the same channel names, so go by section.
     annotator_channels:
-      - Project GAB P6 Annotators Deployed
+      - Project GAB* Annotators*
     qc_channels:
-      - Project GAB P6 QC Deployed
+      - Project GAB* QC*
     qm_channels: []           # only here does the bot use the internal QM documents
     # Every question the bot can't answer (or isn't sure about) is posted here as a card for the
     # team, with a "Mark as answered" button. Make it a private, staff-only channel.

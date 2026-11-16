@@ -215,9 +215,10 @@ class FaqBot(commands.Bot):
             for channel in guild.text_channels
             if platform.is_answer_channel(*channel_keys(channel)[0])
         ]
-        keys = {key.casefold() for channel in targets for key in channel_keys(channel)[0]}
-        if platform.answer_channels - keys:
-            log.error("Configured answer channels are missing from the guild")
+        keys = [key for channel in targets for key in channel_keys(channel)[0]]
+        missing = platform.unmatched_answer_channels(keys)
+        if missing:
+            log.error("Configured answer channels match nothing in the guild: %s", missing)
             return False
         staff = find_text_channel(guild, platform.unanswered_channel)
         if staff is None or guild.me is None:
