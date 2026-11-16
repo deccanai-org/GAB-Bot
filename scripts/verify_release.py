@@ -18,6 +18,20 @@ def command(*arguments):
         raise SystemExit(result.returncode)
 
 
+def fetch_model(model_name, cache_dir):
+    """Download the embedding model into cache_dir if missing; a no-op when already cached.
+
+    The bot itself only ever loads the model with local_files_only=True, and models/ is not in
+    git, so a fresh checkout (CI) has to fetch the weights before the real-embedding gates run.
+    """
+    from fastembed import TextEmbedding
+
+    try:
+        TextEmbedding(model_name=model_name, cache_dir=str(cache_dir), threads=1)
+    except Exception as error:
+        raise SystemExit(f"Could not download embedding model {model_name}: {error}") from error
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -38,6 +52,7 @@ def main():
         from gab_faq.knowledge import KnowledgeBase
 
         settings = replace(load_settings(), engine="search")
+        fetch_model(settings.search.model, settings.search.cache_dir)
         engine = build_engine(settings, KnowledgeBase(settings.knowledge_dir))
         if engine.inner.embedder is None:
             raise SystemExit("Full acceptance requires the real embedding model")
