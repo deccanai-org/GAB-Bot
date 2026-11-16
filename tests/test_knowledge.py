@@ -139,7 +139,8 @@ def test_phase62_questions_reach_their_entries(knowledge, question, expected):
 
 
 @pytest.mark.parametrize(
-    "question", ["what counts as minor issues for a 4?", "the response has minor errors, what score?"]
+    "question",
+    ["what counts as minor issues for a 4?", "the response has minor errors, what score?"],
 )
 def test_rating_minor_issues_do_not_pull_in_the_refusal_entry(knowledge, question):
     """Seen in review: a "minor -> children" synonym made U4 rank 3rd for rating questions."""
