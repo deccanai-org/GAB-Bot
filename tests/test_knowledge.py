@@ -4,6 +4,7 @@ wrong answer, e.g. an old phase's model name sneaking into the current FAQ."""
 import pytest
 
 from gab_faq.knowledge import KnowledgeBase, parse_document
+from gab_faq.retrieval import LocalRetriever
 
 from .conftest import ROOT
 
@@ -90,10 +91,60 @@ def test_current_faq_has_current_models(knowledge):
 
 
 def test_old_recording_and_queue_requirements_are_not_active(knowledge):
-    assert all(doc.phase == "6.1" for doc in knowledge.documents)
+    assert all(doc.phase in {"6.1", "6.2"} for doc in knowledge.documents)
     assert "No screen recording is needed for Phase 6.1" in knowledge.render()
     assert "5 hours after you pick it up" not in knowledge.render()
     assert "1 out of every 5" not in knowledge.render("qm")
+
+
+def test_phase62_rules_are_active_and_old_model_b_steps_are_gone(knowledge):
+    """Bot queries doc (15 Nov 2026): 6.2 is Model A only on 1p-old -> flash_1p_old_test_arm,
+    with no Reset and no Model B work."""
+    text = knowledge.render()
+    for phrase in [
+        "1p-old -> flash_1p_old_test_arm",
+        "do not work on any Reset",
+        "Model B will no longer be visible",
+        "3 nudges rule",
+        "Coding tasks rather than Generalist tasks",
+    ]:
+        assert phrase in text
+    for stale in [
+        "Reset after Model A and before Product B",
+        "Reset the environment and paste the Reset ID",
+        "Product B: GPT-5.6 Terra High; checked before every turn",
+        "Fill the field for both products",
+        "Model B: drive the full conversation",
+    ]:
+        assert stale not in text
+
+
+@pytest.mark.parametrize(
+    "question,expected",
+    [
+        ("Which model do I use in Phase 6.2?", "U1"),
+        # Every reset entry now says "no Reset in 6.2", so any of them is a correct answer.
+        ("Do I need to do a Reset in Phase 6.2?", {"U2", "IN13", "A5", "A5b", "PG6"}),
+        ("Conversation Context still shows Model B, what do I fill in?", "U3"),
+        # "refused", "kids" and "picture" reach the entry only through retrieval.SYNONYMS.
+        ("the model refused to make a picture of kids in a classroom, what now", "U4"),
+        ("model gave a hard punt, what do I do", "U4"),
+        ("it says couldn't open the task but I have 2 limited throttle tasks", "U5"),
+    ],
+)
+def test_phase62_questions_reach_their_entries(knowledge, question, expected):
+    evidence = LocalRetriever(knowledge).retrieve(question, "annotator")
+    expected = {expected} if isinstance(expected, str) else expected
+    assert expected & {c.entry.id for c in evidence.candidates[:3]}
+
+
+@pytest.mark.parametrize(
+    "question", ["what counts as minor issues for a 4?", "the response has minor errors, what score?"]
+)
+def test_rating_minor_issues_do_not_pull_in_the_refusal_entry(knowledge, question):
+    """Seen in review: a "minor -> children" synonym made U4 rank 3rd for rating questions."""
+    evidence = LocalRetriever(knowledge).retrieve(question, "annotator")
+    assert "U4" not in [c.entry.id for c in evidence.candidates[:4]]
 
 
 def test_every_document_has_valid_header(knowledge):

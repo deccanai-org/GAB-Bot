@@ -3,7 +3,7 @@
   role: annotator
   question: Which model do I pick for Product A?
   outcome: [answered]
-  must_include: [GOAT-on-Thorin, flash_dte_test_arm]
+  must_include: [1p-old, flash_1p_old_test_arm]
   must_not_include: [Locust, Sonnet]
   critical: true
 
@@ -11,9 +11,42 @@
   role: annotator
   question: Which model is Product B?
   outcome: [answered]
-  must_include: [GPT-5.6 Terra High]
+  must_include: [no longer be visible]
   must_not_include: [Sonnet]
   critical: true
+
+- id: phase62-model
+  role: annotator
+  question: Which model do I use in Phase 6.2?
+  outcome: [answered]
+  must_include: [1p-old, flash_1p_old_test_arm, Model A]
+  critical: true
+
+- id: phase62-no-reset
+  role: annotator
+  question: Do I need to do a Reset or reset the environment in Phase 6.2?
+  outcome: [answered]
+  must_include: [do not work on any Reset]
+  critical: true
+
+- id: phase62-model-b-context
+  role: annotator
+  question: Conversation Context still shows Model A and Model B. What do I fill in?
+  outcome: [answered]
+  must_include: [Model A only]
+
+- id: phase62-hard-refusal
+  role: annotator
+  question: The model gives a hard refusal and won't make the image. What do I do?
+  outcome: [answered]
+  must_include: [3]
+  must_include_any: [next intent, move on]
+
+- id: phase62-couldnt-open-task
+  role: annotator
+  question: It says Couldn't open the task but I have two limited throttle tasks. What should I do?
+  outcome: [answered]
+  must_include: [Coding tasks]
 
 - id: wrong-model
   role: annotator
@@ -102,8 +135,7 @@
   role: annotator
   question: How do I run the ChatGPT export script, and what does it produce?
   outcome: [answered]
-  must_include: [chatgpt_conversation.json]
-  must_include_any: [no debug, needs no debug]
+  must_include: [Not needed, Model A only]
   critical: true
 
 - id: null-debug-qc
@@ -174,22 +206,22 @@
 
 - id: annotator-checklist
   role: annotator
-  question: What is on the Phase 6.1 annotator pre-submission checklist?
+  question: What is on the annotator pre-submission checklist?
   outcome: [answered]
-  must_include: [flash_dte_test_arm, GPT-5.6 Terra High, Reset ID, debug]
+  must_include: [flash_1p_old_test_arm, No Model B, no Reset, debug]
 
 - id: video-reset
   role: annotator
   question: Where is the reset playground video, and how do I reset before Model B?
   outcome: [answered]
-  must_include: [Reset ID, 1BZoB5sg995F931r7RnxskYe81esTNuqf]
+  must_include: [Phase 6.2, 1BZoB5sg995F931r7RnxskYe81esTNuqf]
   critical: true
 
 - id: video-debug
   role: annotator
   question: Where is the debug and conversation JSONs playground video?
   outcome: [answered]
-  must_include: [chatgpt_conversation.json, 1SZVrzaVMNQtFdncNUX7pYx92OzEr6Jm6]
+  must_include: [debug_info.json, 1SZVrzaVMNQtFdncNUX7pYx92OzEr6Jm6]
 
 - id: video-natural
   role: annotator
@@ -207,7 +239,7 @@
   role: annotator
   question: Where is the account setup playground video?
   outcome: [answered]
-  must_include: [GPT-5.6 Terra High, 1m63i1mS4TgWJG9G7kl5znuc_sZvhDXei]
+  must_include: [flash_1p_old_test_arm, 1m63i1mS4TgWJG9G7kl5znuc_sZvhDXei]
 
 - id: video-intro-pre
   role: annotator
@@ -237,7 +269,7 @@
   role: annotator
   question: Which playground video introduces production tasking, and what are the steps?
   outcome: [answered]
-  must_include: [1-Tst4EFQeRxQzL69eLPJIsthxRm_ZGmj, Reset ID]
+  must_include: [1-Tst4EFQeRxQzL69eLPJIsthxRm_ZGmj, Model A]
 
 - id: action-reset
   role: annotator
@@ -257,7 +289,7 @@
   role: unknown
   question: What is the capital of France?
   outcome: [not_in_faq]
-  must_not_include: [flash_dte_test_arm]
+  must_not_include: [flash_dte_test_arm, flash_1p_old_test_arm]
 
 - id: greeting
   role: unknown

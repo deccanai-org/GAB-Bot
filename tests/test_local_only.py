@@ -30,7 +30,7 @@ def test_real_faq_lookup_runs_with_network_disabled(tmp_path, monkeypatch):
     answer = answer_as_user(
         engine, "discord:offline-test", "Which model is Product A?", "annotator"
     )
-    assert answer.outcome == "answered" and "flash_dte_test_arm" in answer.text
+    assert answer.outcome == "answered" and "flash_1p_old_test_arm" in answer.text
     unknown = answer_as_user(engine, "discord:offline-test", "What is the capital of France?")
     assert unknown.needs_escalation
 

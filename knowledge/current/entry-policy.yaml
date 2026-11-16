@@ -9,7 +9,9 @@ documents:
   phase6-evaluation.md: {external_processing_approved: true}
   playground-help.md: {external_processing_approved: true}
   rating-reference.md: {external_processing_approved: true}
+  phase62-updates.md: {external_processing_approved: true}
 precedence_evidence:
+  - "Bot queries-daily updated - Google Docs.pdf p1 (15 Nov 2026): Phase 6.2 is Model A Conversation Generation only on 1p-old -> flash_1p_old_test_arm; no Reset, no Model B or other models; Model B no longer visible going forward. Entries mentioning Product B, ChatGPT or reset were rewritten to match."
   - "Annotation- FAQ.pdf p1 heading: Phase 6.1, 14 Nov 2026; p2 Q15: recording not needed; debug mandatory."
   - "GAB Instructions - Production - v6.1.pdf p73: older recording update explicitly says no need to follow effective 13 November; no screen recording for Phase 6.1."
   - "QC-FAQ.pdf p5 heading explicitly labels its model and recording checklist Phase 5."
@@ -38,4 +40,9 @@ entries:
   IN1: {requires: [A7], claims: {phase6.1.screen_recording: not_required}}
   Q14: {requires: [F5], source_location: "GAB Tasking Flow and Rating Methodology - v6.1.pdf p3, null-debug exception"}
   A12: {requires: [A13], source_location: "Annotation- FAQ.pdf p3 Q20-Q21"}
-  IN18: {requires: [IN36], source_location: "Production v6.1.pdf p43-46 and p69-73; Annotation FAQ p3 Q16-Q17"}
+  IN18: {source_location: "Production v6.1.pdf p43-46 and p69-73; Annotation FAQ p3 Q16-Q17"}
+  U1: {source_location: "Bot queries-daily updated - Google Docs.pdf p1, Important Note - Once We Start with 6.2"}
+  U2: {source_location: "Bot queries-daily updated - Google Docs.pdf p1, Important Note - Once We Start with 6.2"}
+  U3: {source_location: "Bot queries-daily updated - Google Docs.pdf p1, row 2 (Model B and Conversation Context)"}
+  U4: {source_location: "Bot queries-daily updated - Google Docs.pdf p1, row 1 (hard punt, 3 nudges)"}
+  U5: {source_location: "Bot queries-daily updated - Google Docs.pdf p1, row 3 (Couldn't open the task, limited throttle)"}

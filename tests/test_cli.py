@@ -62,7 +62,7 @@ def test_ask_json_answers_exact_faq_match_locally(capsys):
     data = json.loads(capsys.readouterr().out)
     assert data["outcome"] == "answered" and data["via"] == "retrieval: exact"
     assert data["sources"] == ["IN13"] and not data["escalated"]
-    assert "https://drive.google.com/file/d/1BZoB5sg995F931r7RnxskYe81esTNuqf/view" in data["reply"]
+    assert "do not work on any Reset" in data["reply"]  # Phase 6.2: no Reset work
 
 
 def test_ask_shows_code_routed_staff_for_actions(capsys):

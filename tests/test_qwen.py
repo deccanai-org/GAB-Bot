@@ -108,7 +108,7 @@ def test_related_video_is_rendered_from_catalog(knowledge):
         answer = Qwen(knowledge, client=client).answer("Where is the reset playground video?")
     assert answer.outcome == "answered"
     assert "1BZoB5sg995F931r7RnxskYe81esTNuqf" in answer.text
-    assert "Reset ID" in answer.text
+    assert "Phase 6.2" in answer.text  # PG6 now says no Reset is needed in 6.2
     assert "1BZoB5sg995F931r7RnxskYe81esTNuqf" not in requests[0].content.decode()
 
 

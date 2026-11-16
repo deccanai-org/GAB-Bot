@@ -283,7 +283,7 @@ def test_real_model_no_confident_answer_from_one_shared_word(question):
     [
         ("What is the Stage 4 human evaluation workflow?", "qc", "EV1"),
         ("Which ratings can I correct in Stage 4?", "qc", "EV2"),
-        ("How do I run the ChatGPT export script?", "annotator", "IN35"),
+        ("How do I run the ChatGPT export script?", "annotator", {"IN35", "IN16"}),
         ("Which model is Product B?", "annotator", "A2"),
         # Checklists used to be outside any numbered entry, so the bot could not find them.
         ("what's on the pre-submission checklist?", "annotator", "A15"),
@@ -292,7 +292,8 @@ def test_real_model_no_confident_answer_from_one_shared_word(question):
     ],
 )
 def test_real_model_role_and_checklist_entries(question, role, expected):
-    assert _real_search().answer(question, role=role).sources[0] == expected
+    expected_ids = {expected} if isinstance(expected, str) else expected
+    assert _real_search().answer(question, role=role).sources[0] in expected_ids
 
 
 def test_real_model_follow_up_in_a_thread_uses_the_earlier_question():
@@ -301,7 +302,8 @@ def test_real_model_follow_up_in_a_thread_uses_the_earlier_question():
         {"role": "assistant", "content": "From the GAB FAQ (A1. Which model is Product A?): ..."},
     ]
     ans = _real_search().answer("and for product B?", role="annotator", history=history)
-    assert ans.outcome == "answered" and "GPT-5.6 Terra High" in ans.text
+    # Phase 6.2: Model A only, so the answer for Product B is "don't work on it".
+    assert ans.outcome == "answered" and "no longer be visible" in ans.text
 
 
 # --- Coverage: every guideline in knowledge/current/ must be inside a numbered entry ---

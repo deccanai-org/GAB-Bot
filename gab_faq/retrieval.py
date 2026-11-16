@@ -39,6 +39,11 @@ SYNONYMS = (
     ("chat chats", "conversation"),
     ("earlier previous prior past older", "old"),
     ("bad poor weak wrong rejected", "unacceptable"),
+    # Phase 6.2 hard-refusal entry (U4): "the model refused to make a picture of kids".
+    ("refuse refused refuses refusing refusal refusals punt punted punts", "refusal"),
+    # Not "minor": rating entries say "minor issues", which must not pull in the refusal entry.
+    ("kid kids child children", "children"),
+    ("photo photos picture pictures", "photo"),
 )
 
 
