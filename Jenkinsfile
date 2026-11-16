@@ -55,11 +55,12 @@ pipeline {
             when { expression { params.ACTION == 'Deploy' } }
             steps {
                 // Same offline check as CI: non-root, read-only filesystem, no network.
+                // No --cpus/--memory: the backend agent's kernel lacks the CFS cgroup
+                // support Docker needs for them, and they only cap the test's resources.
                 sh '''
                     docker run --rm --read-only --network none \
                       --tmpfs /tmp:rw,size=256m \
                       --tmpfs /app/output:rw,uid=10001,gid=10001,size=64m \
-                      --memory 1536m --cpus 1.5 \
                       "$IMAGE_TAG" python scripts/smoke_image.py
                 '''
             }
