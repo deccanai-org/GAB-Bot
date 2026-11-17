@@ -442,7 +442,7 @@ gab_faq:
     # (gab-phase-faq-unanswered) at once; questions still unanswered after after_minutes are listed
     # here. Make it private (staff only). If it doesn't exist, reminders go to
     # gab-phase-faq-unanswered instead.
-    reminder_channel: faq-bot-followups
+    reminder_channel: gab-phase-faq-followups
     # Who the reminder tags: "<@&ROLE_ID>" for a role (e.g. the GAB support team), "<@USER_ID>"
     # for a person; several separated by spaces. Empty = no one is tagged.
     reminder_mention: ""

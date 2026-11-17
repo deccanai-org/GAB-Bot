@@ -203,7 +203,7 @@ def test_question_collection_follows_gab_phase_sections():
 def test_followups_have_their_own_staff_channel():
     settings = load_settings(ROOT / "config.yaml")
     assert settings.discord.unanswered_channel == "gab-phase-faq-unanswered"
-    assert settings.followup.reminder_channel == "faq-bot-followups"
+    assert settings.followup.reminder_channel == "gab-phase-faq-followups"
     assert settings.followup.after_minutes == 60
 
 
