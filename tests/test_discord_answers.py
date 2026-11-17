@@ -10,6 +10,7 @@ import pytest
 from gab_faq.config import Settings, _platform
 from gab_faq.contracts import Answer
 from gab_faq.discord_answers import FaqAnswerer
+from gab_faq.repeats import RepeatSettings, RepeatTracker
 from gab_faq.replies import QuestionLog
 from gab_faq.routing import SupportSettings, parse_contacts
 
@@ -171,7 +172,9 @@ def test_answers_every_message_in_answer_channel(tmp_path):
     answerer, guild, ch = make(tmp_path)
     msg = FakeMessage("which model for product A?", ch.ask, guild)
     assert run(answerer.handle(msg)) is True
-    assert msg.replies == ["Select Flash, then Model Locust."]
+    (reply,) = msg.replies
+    assert reply.startswith("Select Flash, then Model Locust.\n\n")
+    assert "keep checking the announcements channel" in reply  # every answer ends with it
     assert (tmp_path / "faq_questions.jsonl").exists()
     assert ch.unanswered.sent == []  # answered, so nothing for the team
 
@@ -212,6 +215,7 @@ def test_ignores_other_channels_unless_mentioned(tmp_path):
 def test_every_way_of_typing_at_gigi_calls_the_bot(tmp_path):
     brain = FakeBrain()
     answerer, guild, ch = make(tmp_path, brain)
+    answerer.repeats = RepeatTracker(RepeatSettings(max_asks=0))  # same question 4 times on purpose
     guild.self_role = SimpleNamespace(id=555)  # the role Discord creates for the bot
     guild.me = SimpleNamespace(nick="Gigi")  # the bot's nickname in this server
     calls = [
@@ -242,10 +246,15 @@ def test_unanswered_question_posted_for_the_team(tmp_path):
     answerer, guild, ch = make(tmp_path, brain)
     msg = FakeMessage("when do we get paid?", ch.ask, guild)
     run(answerer.handle(msg))
-    # The contact is added by code (routing.py), chosen from the question: payment -> Amtul.
-    assert msg.replies == [
-        "I don't have that in the FAQ.\n\nFor payment queries, please contact Amtul."
-    ]
+    # The contact line is added by code (routing.py), chosen from the question: payment -> the
+    # payment mailbox. Public replies never name a staff member; the card below still does.
+    (reply,) = msg.replies
+    assert reply.startswith(
+        "I don't have that in the FAQ.\n\nFor payment queries, please drop a mail at "
+        "support@deccanexperts.ai. If you still need help after that, contact the admin of this "
+        "project."
+    )
+    assert "Amtul" not in reply
     ((content, kwargs),) = ch.unanswered.sent
     fields = {f.name: f.value for f in kwargs["embed"].fields}
     assert fields["Question"] == "when do we get paid?"
@@ -348,7 +357,7 @@ def test_missing_unanswered_channel_is_not_an_error(tmp_path):
     msg = FakeMessage("when do we get paid?", ch.ask, guild)
     assert run(answerer.handle(msg)) is True
     assert "couldn't send" in msg.replies[0]
-    assert "contact Amtul" in msg.replies[0]
+    assert "support@deccanexperts.ai" in msg.replies[0] and "Amtul" not in msg.replies[0]
     assert "view" in msg.reply_kwargs[0]  # delivery can be retried
 
 
@@ -381,7 +390,8 @@ def test_an_engine_crash_is_still_answered_and_handed_to_the_right_person(tmp_pa
     )
     msg = FakeMessage("when do we get paid?", ch.ask, guild)
     assert run(answerer.handle(msg)) is True
-    assert "flagged" in msg.replies[0] and "contact Amtul" in msg.replies[0]
+    assert "flagged" in msg.replies[0] and "support@deccanexperts.ai" in msg.replies[0]
+    assert "Amtul" not in msg.replies[0]  # the name is only on the card and in the DM
     assert len(ch.unanswered.sent) == 1  # staff card
     assert len(amtul.sent) == 1  # and the routed contact gets a DM
 
@@ -524,7 +534,7 @@ def test_only_configured_contacts_can_be_pinged(tmp_path):
     allowed = msg.reply_kwargs[0]["allowed_mentions"]
     assert [o.id for o in allowed.users] == [555555555]  # the configured escalation contact only
     assert allowed.everyone is False and allowed.roles is False and allowed.replied_user is False
-    assert "For task queries and QC, please contact Amtul / Adiba." in msg.replies[0]
+    assert "For task queries and QC, please contact the admin of this project." in msg.replies[0]
 
 
 def test_answered_questions_ping_nobody(tmp_path):

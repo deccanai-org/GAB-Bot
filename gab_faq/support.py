@@ -263,7 +263,7 @@ class SupportDesk:
             await self._private(
                 interaction,
                 f"Sorry, I couldn't send that to the team right now. Please contact "
-                f"{contact.name} ({contact.label}) directly.",
+                f"{self.support.public_contact} directly.",
             )
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -318,7 +318,7 @@ class SupportDesk:
             )
             await interaction.followup.send(
                 f"Sorry, I couldn't send that to the team. Please contact "
-                f"{contact.name} ({contact.label}) directly.",
+                f"{self.support.public_contact} directly.",
                 ephemeral=True,
             )
             return
@@ -346,7 +346,7 @@ class SupportDesk:
         except OSError:
             log.exception("[FAQ] Support request delivered but could not be logged")
         await interaction.followup.send(
-            f"Thanks, your {what} was sent to {contact.name} ({contact.label}). "
+            f"Thanks, your {what} was sent to the project team ({contact.label}). "
             "They'll follow up with you.",
             ephemeral=True,
         )

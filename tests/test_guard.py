@@ -83,12 +83,18 @@ def test_contact_config_is_validated():
     assert ok["payment"].mention_ids() == ([123456789], [987654321])
 
 
-def test_reply_line_names_the_contact_and_the_right_form():
+def test_reply_line_never_names_staff_and_points_to_the_right_form():
     assert (
         reply_line("environment_reset", SUPPORT)
-        == "For environment resets, please contact Divya Sai."
+        == "For environment resets, please contact the admin of this project."
     )
-    assert reply_line("playground", SUPPORT) == "For playground issues, please contact Rachana."
+    assert (
+        reply_line("playground", SUPPORT)
+        == "For playground issues, please contact the admin of this project."
+    )
+    for category in ("task_qc", "playground", "payment", "environment_reset"):
+        line = reply_line(category, SUPPORT)
+        assert not any(name in line for name in ("Amtul", "Adiba", "Rachana", "Divya"))
     assert "/throttle-request" in reply_line(
         "task_qc", SUPPORT, hint_for("can my task limit be increased?")
     )
@@ -98,10 +104,10 @@ def test_reply_line_names_the_contact_and_the_right_form():
 
 
 def test_contact_line_only_when_a_person_is_needed():
-    assert format_reply(Answer("x", "not_in_faq", route="playground"), support=SUPPORT).endswith(
-        "For playground issues, please contact Rachana."
+    assert "For playground issues, please contact the admin of this project." in format_reply(
+        Answer("x", "not_in_faq", route="playground"), support=SUPPORT
     )
-    assert format_reply(Answer("x", "answered", route="payment"), support=SUPPORT) == "x"
+    assert "contact" not in format_reply(Answer("x", "answered", route="payment"), support=SUPPORT)
 
 
 # --- Requests to act: answered by code, never by an engine/AI ---
@@ -160,7 +166,9 @@ def test_payment_questions_never_reach_the_engine():
     engine, inner = guarded()
     ans = engine.answer("when do we get paid for last week?")
     assert ans.route == "payment" and inner.calls == []
-    assert format_reply(ans, support=SUPPORT).endswith("For payment queries, please contact Amtul.")
+    reply = format_reply(ans, support=SUPPORT)
+    assert "please drop a mail at support@deccanexperts.ai" in reply
+    assert "contact the admin of this project" in reply and "Amtul" not in reply
 
 
 # --- Untrusted input ---
@@ -256,7 +264,7 @@ def test_only_approved_secret_free_faq_files_are_used(tmp_path):
 
 
 def test_the_current_faq_files_are_all_approved_and_secret_free():
-    kb = KnowledgeBase(ROOT / "knowledge" / "current")
+    kb = KnowledgeBase(ROOT / "tests" / "fixtures" / "knowledge-phase6")
     assert kb.documents and all(d.approved for d in kb.documents)
     assert not any(contains_secret(d.body) for d in kb.documents)
 

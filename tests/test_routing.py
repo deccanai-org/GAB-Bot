@@ -205,9 +205,10 @@ def test_answer_channel_matching():
 def test_escalation_tag_only_when_needed():
     ok = Answer("Use Flash.", "answered")
     unknown = Answer("Not in the FAQ.", "not_in_faq")
-    assert format_reply(ok, "<@U9>") == "Use Flash."
-    assert format_reply(unknown, "<@U9>").endswith("<@U9> could you help with this one?")
-    assert format_reply(unknown, "") == "Not in the FAQ."
+    assert format_reply(ok, "<@U9>").startswith("Use Flash.\n\n")
+    assert "<@U9>" not in format_reply(ok, "<@U9>")
+    assert "<@U9> could you help with this one?" in format_reply(unknown, "<@U9>")
+    assert "<@U9>" not in format_reply(unknown, "")
 
 
 def test_staging_replies_are_marked():

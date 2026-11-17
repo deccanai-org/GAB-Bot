@@ -27,8 +27,11 @@ from .knowledge import KnowledgeBase
 from .model_limits import answer_as_user
 from .operations import BoundedAnswers, Busy
 from .redact import redact_secrets
-from .replies import QuestionLog, format_reply, split_message
+from .repeats import RepeatTracker
+from .replies import DEFAULT_ANNOUNCEMENTS, REPEAT_VIA, QuestionLog, format_reply, split_message
 from .routing import classify, hint_for
+from .search import is_small_talk
+from .topics import TopicTracker
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +66,25 @@ def route(
     return None
 
 
+def announcements_link(channel) -> str:
+    """A clickable link to the announcements channel for the asker's section: the one in the same
+    category first (each GAB section has its own), else the server's, else plain words."""
+    if isinstance(channel, discord.Thread):
+        channel = channel.parent
+    guild = getattr(channel, "guild", None)
+    if guild is None:
+        return DEFAULT_ANNOUNCEMENTS
+
+    def is_announcements(c) -> bool:
+        return "announcement" in (getattr(c, "name", "") or "").lower()
+
+    category = getattr(channel, "category", None)
+    local = [c for c in getattr(category, "text_channels", []) if is_announcements(c)]
+    anywhere = [c for c in getattr(guild, "text_channels", []) if is_announcements(c)]
+    found = (local or anywhere or [None])[0]
+    return found.mention if found is not None else DEFAULT_ANNOUNCEMENTS
+
+
 def _clip(text: str, limit: int = FIELD_LIMIT) -> str:
     text = (text or "").strip() or "(empty)"
     return text if len(text) <= limit else text[: limit - 3] + "..."
@@ -84,7 +106,13 @@ def build_unanswered_embed(
     why = answer.outcome.replace("_", " ")
     if answer.escalation_reason:
         why += f": {answer.escalation_reason}"
-    embed = discord.Embed(title="Question the bot couldn't answer", color=discord.Color.orange())
+    embed = discord.Embed(
+        title="Unanswered question: please pick this up", color=discord.Color.orange()
+    )
+    embed.description = (
+        "The bot couldn't fully answer this. A team member needs to reply to the person "
+        '(use "Jump to message"), then click "Mark as answered".'
+    )
     embed.add_field(name="Asked by", value=_clip(asker, 256), inline=True)
     embed.add_field(name="Where", value=_clip(where, 256), inline=True)
     embed.add_field(name="Role", value=role, inline=True)
@@ -116,6 +144,8 @@ class FaqAnswerer:
         )
         self._delivery_locks = WeakValueDictionary()
         self.followup = Followup(self, settings.followup)
+        self.repeats = RepeatTracker(settings.repeat_limit)
+        self.topics = TopicTracker(bot, settings.topic_tracker, settings.discord)
 
     async def start(self) -> None:
         """Called during application setup."""
@@ -124,6 +154,9 @@ class FaqAnswerer:
     async def handle(self, message: discord.Message) -> bool:
         """Answer the message if it's for the bot. Returns True if it answered. Never raises: a
         problem here must not stop the rest of the bot."""
+        # Collect staff-only topics (throttle, payment, reset...) into the tracker channel, whether
+        # or not the bot is asked. Never raises.
+        await self.topics.observe(message)
         try:
             return await self._handle(message)
         except Exception:
@@ -158,40 +191,59 @@ class FaqAnswerer:
             return True
 
         role = platform.role_for_channel(*own, *parent)
-        async with channel.typing():
-            history = await self._history(message)
-            try:
-                answer = await self.executor.answer(
-                    partial(
-                        answer_as_user,
-                        self.brain,
-                        f"discord:{message.author.id}",
-                        question,
-                        role,
-                        history,
-                    ),
-                    user=str(message.author.id),
-                    conversation=f"{channel.id}:{message.author.id}",
-                )
-            except Busy as error:
-                await message.reply(str(error), allowed_mentions=allowed_mentions())
-                return False
-            except TimeoutError:
-                answer = Answer(
-                    "I couldn't finish the FAQ lookup in time. A team member can help.",
-                    "error",
-                    escalation_reason="answer deadline exceeded",
-                )
-            except Exception:
-                # Anything else the engine didn't handle (an AI/API failure, a bug): still reply,
-                # and hand the question to the right person instead of going silent.
-                log.exception("[FAQ] Answering failed for message %s; escalating it", message.id)
-                answer = Answer(
-                    "Sorry, I couldn't process that right now. I've flagged it so a team member "
-                    "can help you.",
-                    "error",
-                    escalation_reason="answering failed unexpectedly",
-                )
+        # The same person asking the same question again and again: answered the first times,
+        # then flagged once to the team instead of answered (repeats.py).
+        answer = None
+        repeat = (
+            None
+            if is_small_talk(question)
+            else self.repeats.reply(self.repeats.record(str(message.author.id), question))
+        )
+        if repeat is not None:
+            text, flag = repeat
+            answer = Answer(
+                text,
+                "needs_human" if flag else "limited",
+                escalation_reason="the same question was asked repeatedly" if flag else "",
+                via=REPEAT_VIA,
+            )
+        if answer is None:
+            async with channel.typing():
+                history = await self._history(message)
+                try:
+                    answer = await self.executor.answer(
+                        partial(
+                            answer_as_user,
+                            self.brain,
+                            f"discord:{message.author.id}",
+                            question,
+                            role,
+                            history,
+                        ),
+                        user=str(message.author.id),
+                        conversation=f"{channel.id}:{message.author.id}",
+                    )
+                except Busy as error:
+                    await message.reply(str(error), allowed_mentions=allowed_mentions())
+                    return False
+                except TimeoutError:
+                    answer = Answer(
+                        "I couldn't finish the FAQ lookup in time. A team member can help.",
+                        "error",
+                        escalation_reason="answer deadline exceeded",
+                    )
+                except Exception:
+                    # Anything else the engine didn't handle (an AI/API failure, a bug): still
+                    # reply, and hand the question to the right person instead of going silent.
+                    log.exception(
+                        "[FAQ] Answering failed for message %s; escalating it", message.id
+                    )
+                    answer = Answer(
+                        "Sorry, I couldn't process that right now. I've flagged it so a team member "
+                        "can help you.",
+                        "error",
+                        escalation_reason="answering failed unexpectedly",
+                    )
         self._ensure_route(answer, question)
         question = redact_secrets(question)
         delivery_failed = answer.needs_escalation and not await self._post_unanswered(
@@ -211,6 +263,7 @@ class FaqAnswerer:
             self.settings.environment,
             support=support,
             mentions_allowed=True,
+            announcements=announcements_link(channel),
         )
         pings = allowed_mentions(
             platform.escalation_mention if answer.needs_escalation else "",

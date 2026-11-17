@@ -1,51 +1,23 @@
-# Reviewable policy supported by the supplied PDFs; no inference from filenames alone.
-# Approval applies to these existing FAQ excerpts only, not new imports or incoming user data.
+# Reviewable policy for the current FAQ. Approval covers these FAQ excerpts only, not new imports or
+# incoming user data. Phase 6.x documents moved to knowledge/archive/ on 17 Nov 2026 (Phase 7 start);
+# their old policy is in git history.
 documents:
-  phase6-annotation.md: {external_processing_approved: true}
-  phase6-qc.md: {external_processing_approved: true}
-  phase6-recording.md: {external_processing_approved: true}
-  phase6-instructions.md: {external_processing_approved: true}
-  phase6-methodology.md: {external_processing_approved: true}
-  phase6-evaluation.md: {external_processing_approved: true}
-  playground-help.md: {external_processing_approved: true}
-  rating-reference.md: {external_processing_approved: true}
-  phase62-updates.md: {external_processing_approved: true}
-  phase62-conversation-qc.md: {external_processing_approved: true}
+  phase7-instructions.md: {external_processing_approved: true}
+  phase7-updates.md: {external_processing_approved: true}
+  phase7-qc.md: {external_processing_approved: true}
 precedence_evidence:
-  - "GAB Conversation QC v6.2 Google Doc (copy 16 Nov 2026, knowledge/source-snapshots/gab-conversation-qc-v6.2.txt): 6.2 Conversation QC rating 1-3, basic/conversation checks, reassignment matrix, discretion addendum; screen recording NOT needed in 6.2; no Model B conversation in 6.2. Its 'conversation.json for both models' line is read as Model A only because the same list says no Model B conversation is generated."
-  - "Bot queries-daily updated - Google Docs.pdf p1 (15 Nov 2026): Phase 6.2 is Model A Conversation Generation only on 1p-old -> flash_1p_old_test_arm; no Reset, no Model B or other models; Model B no longer visible going forward. Entries mentioning Product B, ChatGPT or reset were rewritten to match."
-  - "Annotation- FAQ.pdf p1 heading: Phase 6.1, 14 Nov 2026; p2 Q15: recording not needed; debug mandatory."
-  - "GAB Instructions - Production - v6.1.pdf p73: older recording update explicitly says no need to follow effective 13 November; no screen recording for Phase 6.1."
-  - "QC-FAQ.pdf p5 heading explicitly labels its model and recording checklist Phase 5."
-  - "GAB Tasking Flow and Rating Methodology - v6.1.pdf p2: no screen recording, Gemini debug mandatory."
+  - "GAB Dual Model Instructions - v7 (Google Doc, IMPORTANT UPDATES dated 15/11/2026, copy taken 17 Nov 2026): Product A 3.5 Flash-Lite; Product B 3.8 Flash-Lite -> Model Underwing; screen recording required; Reset Environment between Model A and Model B. GAB Instructions - Production - v7.1.pdf (17 Nov 2026) has the same text and the same exporter script (v2.0.0); its instruction pages are in knowledge/source-snapshots/gab-instructions-production-v7.1.txt. These supersede the Phase 6.2 rules (Model A only, no reset, no recording), which are archived."
+  - "GAB Phase 7 #announcements (16-17 Nov 2026): screen recording mandatory for 7.1; debug JSON mandatory for both products; Product A 3.5 Flash-Lite Thinking level HIGH; latency rules and form; prompting rules; QC thinking-level rules (before/after 12:00 PM IST on 17 Nov). Team answers in the Phase 7 #project-related-queries channels are used only where a Deccan team member answered (Admin, Deccan staff); other contributors' replies are not used."
 entries:
-  A8:
-    source_location: "Annotation- FAQ.pdf p2 Q15; 14 Nov 2026 Phase 6.1 heading on p1"
-    claims: {phase6.1.screen_recording: not_required}
-    requires: [A7]
-  A7: {source_location: "Annotation- FAQ.pdf p3 Q16", claims: {phase6.1.gemini_debug: required}}
-  Q0:
-    source_location: "QC-FAQ.pdf p5 Phase 5 heading; Annotation- FAQ.pdf p1-3; production v6.1 update p73"
-    claims: {phase6.1.screen_recording: not_required}
-    requires: [A8, Q1]
-  Q2:
-    source_location: "QC-FAQ.pdf p5 Q2 is Phase 5; Annotation- FAQ.pdf p1 Q1-Q3 is Phase 6.1"
-    requires: [Q1]
-  Q1: {source_location: "Annotation- FAQ.pdf p1 Q1-Q3"}
-  SR2:
-    source_location: "QC-FAQ.pdf p6 Q10-Q13 (Phase 5); Annotation- FAQ.pdf p2 Q15 (Phase 6.1)"
-    claims: {phase6.1.screen_recording: not_required}
-    requires: [Q0, A8]
-  SR0: {requires: [A8], claims: {phase6.1.screen_recording: not_required}}
-  SR1: {requires: [A7], claims: {phase6.1.screen_recording: not_required}}
-  Q11: {requires: [A8], claims: {phase6.1.screen_recording: not_required}}
-  IN1: {requires: [A7], claims: {phase6.1.screen_recording: not_required}}
-  Q14: {requires: [F5], source_location: "GAB Tasking Flow and Rating Methodology - v6.1.pdf p3, null-debug exception"}
-  A12: {requires: [A13], source_location: "Annotation- FAQ.pdf p3 Q20-Q21"}
-  IN18: {source_location: "Production v6.1.pdf p43-46 and p69-73; Annotation FAQ p3 Q16-Q17"}
-  U1: {source_location: "Bot queries-daily updated - Google Docs.pdf p1, Important Note - Once We Start with 6.2"}
-  U2: {source_location: "Bot queries-daily updated - Google Docs.pdf p1, Important Note - Once We Start with 6.2"}
-  U3: {source_location: "Bot queries-daily updated - Google Docs.pdf p1, row 2 (Model B and Conversation Context)"}
-  U4: {source_location: "Bot queries-daily updated - Google Docs.pdf p1, row 1 (hard punt, 3 nudges)"}
-  U5: {source_location: "Bot queries-daily updated - Google Docs.pdf p1, row 3 (Couldn't open the task, limited throttle)"}
-  CQ7: {source_location: "Project GAB QC announcement (Discord @all), forwarded 16 Nov 2026"}
+  V1: {source_location: "v7 doc, IMPORTANT UPDATES and TASKING DETAILS 1-2"}
+  V2: {source_location: "v7 doc, TASKING DETAILS (model switching observed; rejection)"}
+  V3:
+    source_location: "v7 doc, IMPORTANT UPDATES; How to provide the Screen Recording of the conversation"
+    claims: {phase7.screen_recording: required}
+  V4:
+    source_location: "v7 doc, workflow step 3; HOW TO RESET ENVIRONMENT AFTER MODEL A RUN"
+    claims: {phase7.reset_between_models: required}
+  V20: {source_location: "v7 doc, HOW TO RESET ENVIRONMENT AFTER MODEL A RUN, steps 1-5"}
+  V29:
+    source_location: "v7 doc, How to provide the Screen Recording of the conversation"
+    claims: {phase7.screen_recording: required}

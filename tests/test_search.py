@@ -78,10 +78,20 @@ def test_split_entries(faq_dir):
     assert all("Version note" not in e.text for e in entries)
 
 
-def test_real_faq_entries_have_unique_ids():
-    kb = KnowledgeBase(ROOT / "knowledge" / "current")
+@pytest.mark.parametrize(
+    "directory,expected",
+    [
+        (
+            "tests/fixtures/knowledge-phase6",
+            {"A1", "A8", "EV1", "EV16", "IN35", "Q14", "PG11", "RR7h"},
+        ),
+        ("knowledge/current", {"V1", "V3", "V4", "V20", "V31", "PG1", "PG6"}),
+    ],
+)
+def test_real_faq_entries_have_unique_ids(directory, expected):
+    kb = KnowledgeBase(ROOT / directory)
     ids = [e.id for d in kb.documents for e in split_entries(d)]
-    assert {"A1", "A8", "EV1", "EV16", "IN35", "Q14", "PG11", "RR7h"} <= set(ids)
+    assert expected <= set(ids)
     assert not [i for i, n in Counter(ids).items() if n > 1], "two FAQ entries share an ID"
 
 
@@ -247,7 +257,7 @@ def _real_search():
 @lru_cache(maxsize=1)
 def _load_real_search():
     settings = load_settings(ROOT / "config.yaml").search
-    return FaqSearch(KnowledgeBase(ROOT / "knowledge" / "current"), settings)
+    return FaqSearch(KnowledgeBase(ROOT / "tests" / "fixtures" / "knowledge-phase6"), settings)
 
 
 @pytest.mark.parametrize(

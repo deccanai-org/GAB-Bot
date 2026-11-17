@@ -120,10 +120,7 @@ NOT_FOUND = (
     "I couldn't find this in the GAB FAQ, so I've flagged it for the team. "
     "A team member will follow up."
 )
-PAYMENT_REPLY = (
-    "Payment questions are handled by the team, not the FAQ. I've flagged this so a team "
-    "member can help you."
-)
+PAYMENT_REPLY = "Payment questions aren't covered by the FAQ, so I've flagged this for the team."
 THANKS_REPLY = "You're welcome! Ask me anything else about the GAB project."
 GREETING_REPLY = (
     "Hi! I answer questions from the GAB project FAQ: models, screen recording, debug JSON, "

@@ -58,11 +58,12 @@ def test_check_reports_qwen_readiness_and_staff_mentions(capsys):
 
 
 def test_ask_json_answers_exact_faq_match_locally(capsys):
-    assert cli.main(["ask", "How do I reset the environment?", "--json", "--fresh-quota"]) == 0
+    question = "How do I reset the environment after the Model A run?"
+    assert cli.main(["ask", question, "--json", "--fresh-quota"]) == 0
     data = json.loads(capsys.readouterr().out)
     assert data["outcome"] == "answered" and data["via"] == "retrieval: exact"
-    assert data["sources"] == ["IN13"] and not data["escalated"]
-    assert "do not work on any Reset" in data["reply"]  # Phase 6.2: no Reset work
+    assert data["sources"] == ["V20"] and not data["escalated"]
+    assert "Reset ID" in data["reply"]  # Phase 7: reset between Model A and Model B
 
 
 def test_ask_shows_code_routed_staff_for_actions(capsys):
@@ -106,7 +107,7 @@ def test_hello_there_is_a_greeting():
 
 
 def test_observed_live_envelope_variant_is_normalized_and_still_validated():
-    knowledge = KnowledgeBase(ROOT / "knowledge" / "current")
+    knowledge = KnowledgeBase(ROOT / "tests" / "fixtures" / "knowledge-phase6")
     entries = [e for d in knowledge.documents for e in split_entries(d)]
     a7 = next(e for e in entries if e.id == "A7")
     reply = {

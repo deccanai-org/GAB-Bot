@@ -119,7 +119,8 @@ def test_bad_catalog_update_keeps_last_good_knowledge(tutorial_knowledge):
 
 
 def test_archive_inventory_has_no_unmapped_or_duplicate_paths():
-    directory = ROOT / "knowledge" / "current"
+    # The full Playgrounds archive inventory, as catalogued for Phase 6 (frozen fixture).
+    directory = ROOT / "tests" / "fixtures" / "knowledge-phase6"
     catalog = yaml.safe_load((directory / "playground-videos.yaml").read_text(encoding="utf-8"))
     videos = catalog["videos"]
     archive_videos = [video for video in videos if "archive_paths" in video]
@@ -133,5 +134,17 @@ def test_archive_inventory_has_no_unmapped_or_duplicate_paths():
     counts = Counter(entry.id for entry in entries)
     assert all(count == 1 for count in counts.values())
     for video in load_tutorials(directory / "playground-videos.yaml"):
+        assert all(ref in counts for ref in video.faq_ids)
+        assert any(ref.startswith("PG") for ref in video.faq_ids)
+
+
+def test_current_catalog_links_only_to_current_entries():
+    directory = ROOT / "knowledge" / "current"
+    entries = [entry for doc in KnowledgeBase(directory).documents for entry in split_entries(doc)]
+    counts = Counter(entry.id for entry in entries)
+    assert all(count == 1 for count in counts.values())
+    videos = load_tutorials(directory / "playground-videos.yaml")
+    assert videos
+    for video in videos:
         assert all(ref in counts for ref in video.faq_ids)
         assert any(ref.startswith("PG") for ref in video.faq_ids)

@@ -82,6 +82,11 @@ class SupportSettings:
     mention_in_reply: bool = False
     request_cooldown_seconds: int = 60  # per person, per command
     max_attachment_mb: int = 8
+    # What public replies say instead of a person's name. Staff names appear only on the private
+    # staff cards (and in direct messages to the staff), never in a reply people can see.
+    public_contact: str = "the admin of this project"
+    # Payment questions are always pointed to this address (empty: only the admin line).
+    payment_email: str = "support@deccanexperts.ai"
 
     def contact(self, category: str) -> Contact:
         return self.contacts.get(category) or self.contacts[self.default_route]
@@ -224,9 +229,18 @@ HINTS = {
 def reply_line(
     category: str, support: SupportSettings, hint: str = "", with_mention: bool = False
 ) -> str:
-    """The sentence the bot adds under an answer it couldn't fully give."""
+    """The sentence the bot adds under an answer it couldn't fully give. It never names a person:
+    public replies point to the project admin (support.public_contact), and payment questions to
+    the payment mailbox. The routed person is told privately through the staff card."""
     contact = support.contact(category)
-    who = contact.name + (f" ({contact.mention})" if with_mention and contact.mention else "")
+    who = support.public_contact + (
+        f" ({contact.mention})" if with_mention and contact.mention else ""
+    )
+    if category == "payment" and support.payment_email:
+        return (
+            f"For payment queries, please drop a mail at {support.payment_email}. "
+            f"If you still need help after that, contact {who}."
+        )
     return f"For {contact.label}, please contact {who}." + HINTS.get(hint, "")
 
 

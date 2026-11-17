@@ -141,8 +141,23 @@ accepts a task ID, description, optional error text, and up to three attachments
 Commands are scoped to the project and rate-limited per person. Staff cards go
 to `support.requests_channel`, falling back to `discord.unanswered_channel`.
 
-Unanswered FAQ questions get staff cards with a persistent resolution button.
-After `followup.after_minutes`, open cards get one reminder. Reminded cards keep
+Public replies never name a staff member: the contact line says "contact
+`support.public_contact`" (default "the admin of this project"), and payment
+questions are pointed to `support.payment_email` first. Staff names stay on the
+private staff cards and in direct messages to the staff. Every reply ends with a
+line on what to do next (carry on with the answer, or ask again in more detail) and
+a reminder to keep checking the section's #announcements channel.
+
+`repeat_limit` stops one person asking the same question again and again: the ask
+that reaches `max_asks` inside `window_minutes` is flagged once to the team instead
+of answered, and later repeats get a short "already flagged" reply.
+
+There are two staff channels. Unanswered FAQ questions get a staff card in
+`discord.unanswered_channel` (`faq-bot-unanswered`) at once, with a persistent
+"Mark as answered" button. Questions still open after `followup.after_minutes`
+are listed in `followup.reminder_channel` (`faq-bot-followups`; if it doesn't
+exist, the reminder goes to `faq-bot-unanswered`). Make both channels private.
+Each open card gets one reminder. Reminded cards keep
 checking for replies. The durable ticket index and persisted scan cursors keep old questions tracked
 across restarts and large histories.
 
@@ -180,6 +195,16 @@ contains title, audience, phase, and update date. Archived or unapproved documen
 and documents containing recognized secrets are excluded. Old phases belong in
 `knowledge/archive/`.
 
+**New phase checklist.** Move the previous phase's files to `knowledge/archive/`
+(add `status: archived` to their header), add the new phase's files to
+`knowledge/current/`, list each new file in `knowledge/current/entry-policy.yaml`
+(`external_processing_approved: true`, or Qwen will hand its questions to staff),
+point `playground-videos.yaml` at the new entry IDs, and replace
+`tests/eval/questions.yaml` with questions for the new phase. Discord sections whose
+name starts with "GAB Phase" are picked up automatically (answering and question
+collection). Engine tests run against the frozen Phase 6 FAQ in
+`tests/fixtures/knowledge-phase6/`, so they don't change with the phase.
+
 Playground video references live in `knowledge/current/playground-videos.yaml`.
 Each video maps to explicit FAQ IDs. Local search returns the approved written
 solution followed by its relevant video links. Use supplied HTTPS URLs; a missing
@@ -192,7 +217,7 @@ coverage, source precedence, and the mapping of supplied links to archive videos
 python scripts/run_eval.py --engine search
 ```
 
-The Phase 6.1 evaluation contains 40 questions and fails below the configured
+The Phase 7 evaluation (`tests/eval/questions.yaml`) contains 23 questions and fails below the configured
 pass threshold or on a critical failure. Embedding-dependent unit tests skip
 when the local model is not cached. Qwen HTTP/protocol tests use mocked responses;
 they do not establish live key access or provider answer quality.

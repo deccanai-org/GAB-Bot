@@ -1,122 +1,66 @@
-# Current Phase 6.1 retrieval, source precedence, video links and guard behavior.
+# Current Phase 7 retrieval and guard behavior (GAB Dual Model Instructions v7).
+# The Phase 6.2 set is kept in phase62-questions.yaml (run it against tests/fixtures/knowledge-phase6).
 - id: model-product-a
   role: annotator
   question: Which model do I pick for Product A?
   outcome: [answered]
-  must_include: [1p-old, flash_1p_old_test_arm]
-  must_not_include: [Locust, Sonnet]
+  must_include: [3.5 Flash-Lite]
+  must_not_include: [flash_1p_old_test_arm, Locust]
   critical: true
 
 - id: model-product-b
   role: annotator
   question: Which model is Product B?
   outcome: [answered]
-  must_include: [no longer be visible]
-  must_not_include: [Sonnet]
+  must_include: [Model Underwing]
   critical: true
 
-- id: phase62-model
+- id: model-switching
   role: annotator
-  question: Which model do I use in Phase 6.2?
+  question: The model keeps switching during the conversation, what should I do?
   outcome: [answered]
-  must_include: [1p-old, flash_1p_old_test_arm, Model A]
+  must_include: [switch it back]
   critical: true
 
-- id: phase62-no-reset
+- id: recording-required
   role: annotator
-  question: Do I need to do a Reset or reset the environment in Phase 6.2?
+  question: Is screen recording required in Phase 7?
   outcome: [answered]
-  must_include: [do not work on any Reset]
+  must_include_any: [Screen recording is required, Record the whole interaction]
+  must_not_include: [No screen recording is needed]
   critical: true
 
-- id: phase62-model-b-context
+- id: reset-required
   role: annotator
-  question: Conversation Context still shows Model A and Model B. What do I fill in?
+  question: Do I reset the environment between Model A and Model B?
   outcome: [answered]
-  must_include: [Model A only]
-
-- id: phase62-hard-refusal
-  role: annotator
-  question: The model gives a hard refusal and won't make the image. What do I do?
-  outcome: [answered]
-  must_include: [3]
-  must_include_any: [next intent, move on]
-
-- id: phase62-couldnt-open-task
-  role: annotator
-  question: It says Couldn't open the task but I have two limited throttle tasks. What should I do?
-  outcome: [answered]
-  must_include: [Coding tasks]
-
-- id: qc62-rating
-  role: qc
-  question: How do I rate a task in Phase 6.2 Conversation QC?
-  outcome: [answered]
-  must_include: [1 to 3]
+  must_include_any: [Reset ID, reset the environment]
+  must_not_include: [do not work on any Reset]
   critical: true
 
-- id: qc62-reassign
-  role: qc
-  question: Debug info is missing and can't be recovered. Who redoes the task?
-  outcome: [answered]
-  must_include: [SAME annotator]
-
-- id: wrong-model
+- id: reset-steps
   role: annotator
-  question: What happens if the model switches mid-conversation?
+  question: How do I reset the environment after the Model A run?
   outcome: [answered]
-  must_include_any: [switch it back, switch back]
-  must_include: [rejection]
+  must_include: [Reset ID]
 
-- id: no-screen-recording
+- id: memory-off
   role: annotator
-  question: Do I need a screen recording for Phase 6.1?
+  question: Should model memory be on or off?
   outcome: [answered]
-  must_include_any: [not needed, not required, no screen recording]
-  must_include: [debug]
-  critical: true
+  must_include: [Memory]
 
-- id: older-recording-checklist
-  role: qc
-  question: Does the older recording checklist mean I should reject a Phase 6.1 task without a video?
-  outcome: [answered]
-  must_include: ['No', Phase 6.1]
-  critical: true
-
-- id: keep-history
+- id: workspace
   role: annotator
-  question: Can I delete previous conversations from the test account?
+  question: How do I connect Gemini to Google Workspace?
   outcome: [answered]
-  must_include: ['No']
-  must_include_any: [never delete, preserve]
-  critical: true
-
-- id: turn-count
-  role: annotator
-  question: Where does the turn count start?
-  outcome: [answered]
-  must_include: [seed, Turn 1]
+  must_include: [Connected Apps]
 
 - id: key-turn
   role: annotator
-  question: How do I choose the key turn?
+  question: What is the key turn?
   outcome: [answered]
-  must_include_any: [maximum synthesis, highest synthesis]
-  must_include: [deliverable]
-
-- id: followups-not-reused
-  role: annotator
-  question: Can I reuse the same follow-up prompts in Model A and Model B?
-  outcome: [answered]
-  must_include: ['No', reply]
-  critical: true
-
-- id: intent-unspecified-details
-  role: annotator
-  question: The model asks for something the intent does not specify. What do I say?
-  outcome: [answered]
-  must_include: [files]
-  must_include_any: [do not make up, don't make up]
+  must_include: [maximum synthesis]
 
 - id: nudge-limit
   role: annotator
@@ -124,165 +68,60 @@
   outcome: [answered]
   must_include: [3]
 
-- id: latency-limit
+- id: llm-followups
   role: annotator
-  question: How long should I wait for a model to generate a turn?
+  question: Can I use ChatGPT to write my follow-up prompts?
   outcome: [answered]
-  must_include: [25 minutes, Conversation Context]
-  must_include_any: [abandon, move on]
+  must_include_any: [written by you, never with an LLM]
 
-- id: context-na
+- id: debug-turns
   role: annotator
-  question: What goes in Conversation Context if nothing went wrong?
+  question: What must I check in the debug JSON before uploading?
   outcome: [answered]
-  must_include: [NA, both]
-
-- id: debug-completeness
-  role: annotator
-  question: What must I check in the Gemini debug JSON?
-  outcome: [answered]
-  must_include_any: [one entry per turn, one entry per conversation turn]
-  must_include: [none missing]
-
-- id: gpt-export
-  role: annotator
-  question: How do I run the ChatGPT export script, and what does it produce?
-  outcome: [answered]
-  must_include: [Not needed, Model A only]
+  must_include: [turn counts]
   critical: true
 
-- id: null-debug-qc
-  role: qc
-  question: Should I reject a conversation just because the debug JSON shows null?
-  outcome: [answered]
-  must_include_any: [not on that basis alone, do not reject solely]
-  must_include: [Conversation Context]
-  critical: true
-
-- id: final-artefacts
+- id: allow-pasting
   role: annotator
-  question: Should I upload every version of a refined artefact?
+  question: The console won't let me paste the script
   outcome: [answered]
-  must_include: [final]
-  must_include_any: [do not upload intermediate, not versions]
+  must_include: [allow pasting]
+
+- id: artefact-format
+  role: annotator
+  question: In what format do I upload calendar invites and email drafts?
+  outcome: [answered]
+  must_include: [PDF]
 
 - id: missing-gmail-draft
   role: annotator
   question: The task asked for a Gmail draft but the model did not create it. What do I upload?
   outcome: [answered]
-  must_include: [Nothing, criterion]
+  must_include_any: [no upload is needed, not met]
 
-- id: stage4-flow
-  role: qc
-  question: What is the Stage 4 human evaluation workflow?
-  outcome: [answered]
-  must_include: [10-15 minutes, artefact, pre-filled]
-
-- id: stage4-score-scope
-  role: qc
-  question: Should I accept pre-filled ratings or correct them in Stage 4?
-  outcome: [answered]
-  must_include: [artefact check, discrepancy]
-  critical: true
-
-- id: stage4-dimension-scope
-  role: qc
-  question: Which L1 dimensions can the Stage 4 artefact check change?
-  outcome: [answered]
-  must_include: [1.1-1.6, 3.1, 3.2, 3.3, 4.2, 8.1]
-  critical: true
-
-- id: stage4-justifications
-  role: qc
-  question: How do I write each Stage 4 dimension justification?
-  outcome: [answered]
-  must_include: [2-3 sentences, 16, L2, evidence]
-
-- id: preference-seven-options
-  role: qc
-  question: What is the SxS preference scale?
-  outcome: [answered]
-  must_include: [seven, No clear preference, significantly better]
-  critical: true
-
-- id: preference-summary
-  role: qc
-  question: What belongs in the SxS summary?
-  outcome: [answered]
-  must_include: [2-3 sentence, both products, strength]
-
-- id: score-order
+- id: share-link
   role: annotator
-  question: When should I score each product?
+  question: How do I get the public share link of the conversation?
   outcome: [answered]
-  must_include: [Immediately, last]
+  must_include: [Share Conversation]
 
-- id: annotator-checklist
+- id: record-mac
   role: annotator
-  question: What is on the annotator pre-submission checklist?
+  question: How do I record only the conversation window on a Mac?
   outcome: [answered]
-  must_include: [flash_1p_old_test_arm, No Model B, no Reset, debug]
+  must_include: [Command + Shift + 5]
 
-- id: video-reset
+- id: record-windows
   role: annotator
-  question: Where is the reset playground video, and how do I reset before Model B?
+  question: How do I screen record a Chrome tab on Windows?
   outcome: [answered]
-  must_include: [Phase 6.2, 1BZoB5sg995F931r7RnxskYe81esTNuqf]
-  critical: true
+  must_include: [Clipchamp]
 
-- id: video-debug
+- id: model-b-prompts
   role: annotator
-  question: Where is the debug and conversation JSONs playground video?
+  question: Can I reuse my Model A prompts for Model B?
   outcome: [answered]
-  must_include: [debug_info.json, 1SZVrzaVMNQtFdncNUX7pYx92OzEr6Jm6]
-
-- id: video-natural
-  role: annotator
-  question: Where is the creating natural conversations playground video?
-  outcome: [answered]
-  must_include: [persona, 1sTNL9IUrZnbDF-6kFt2LUg9GMvoMN7uf]
-
-- id: video-artifacts
-  role: annotator
-  question: Where is the artefacts playground video, and which files do I upload?
-  outcome: [answered]
-  must_include: [final, 1ynjoJPBMOtREIhJNKYps3AQJnwkvjZt1]
-
-- id: video-account
-  role: annotator
-  question: Where is the account setup playground video?
-  outcome: [answered]
-  must_include: [flash_1p_old_test_arm, 1m63i1mS4TgWJG9G7kl5znuc_sZvhDXei]
-
-- id: video-intro-pre
-  role: annotator
-  question: Which playground video introduces pre-assessment tasking?
-  outcome: [answered]
-  must_include: [16p1SxxAGC3U1DybXTLt7sXfb6-iiHoxz]
-
-- id: video-natural-pre
-  role: annotator
-  question: Which playground video covers creating natural conversations for pre-assessment?
-  outcome: [answered]
-  must_include: [1_5fNXy0G7m-2N88szcRcguv3He90GWjg]
-
-- id: video-sharing
-  role: annotator
-  question: Where is the sharing the conversation playground video?
-  outcome: [answered]
-  must_include: [Share, 1lN94yyX-jlTyFVwHdoA_MJQNqIXfBQJN]
-
-- id: video-evaluation
-  role: qc
-  question: Where is the criteria and dimensions evaluation playground video?
-  outcome: [answered]
-  must_include: [1XKv3KRRcj-NkCRUvvT5WGKqM_Zv_sSvO, pre-filled]
-
-- id: video-tasking-walkthrough
-  role: annotator
-  question: Which playground video introduces production tasking, and what are the steps?
-  outcome: [answered]
-  must_include: [1-Tst4EFQeRxQzL69eLPJIsthxRm_ZGmj, Model A]
+  must_include: [own reply]
 
 - id: action-reset
   role: annotator
@@ -302,9 +141,30 @@
   role: unknown
   question: What is the capital of France?
   outcome: [not_in_faq]
-  must_not_include: [flash_dte_test_arm, flash_1p_old_test_arm]
+  must_not_include: [3.5 Flash-Lite, Model Underwing]
 
 - id: greeting
   role: unknown
   question: hello
   outcome: [small_talk]
+
+- id: memory-check-prompt
+  role: annotator
+  question: Should I ask "What have we been working on?" before the seed prompt?
+  outcome: [answered]
+  must_include_any: [seed prompt]
+  critical: false
+
+- id: low-thinking-before-noon
+  role: annotator
+  question: I submitted a task with Product A on thinking level LOW before the HIGH rule was announced. Will I be penalized?
+  outcome: [answered]
+  must_include_any: ["12:00 PM IST", not penalized]
+  critical: false
+
+- id: qc-spec-doc
+  role: qc
+  question: I can't open the QC Specification Doc, it says access denied.
+  outcome: [answered]
+  must_include_any: [Reload, reload]
+  critical: false

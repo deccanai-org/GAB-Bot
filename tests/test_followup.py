@@ -390,3 +390,17 @@ def test_concurrent_escalation_clicks_deliver_one_card(tmp_path):
 
     run(click_twice())
     assert len(unanswered.sent) == 1
+
+
+def test_a_card_posted_by_another_bot_is_dropped_not_retried(tmp_path):
+    """Seen live: a test bot reused the output folder of the production bot and tried every five
+    minutes to edit the production bot's card (Discord 403 50005). Such cards are now dropped."""
+    question = FakeMessage(100, ASKER, "when is the deadline?")
+    followup, unanswered = make(
+        tmp_path, [card(11, 100, minutes_ago=75)], FakeChannel(11, "support", [question])
+    )
+    run(followup.sync_channel(unanswered))  # indexed while it was still ours
+    unanswered.messages[0].author = SimpleNamespace(id=12345, bot=True, name="other-bot")
+    run(followup.check_once())
+    assert unanswered.sent == []  # no reminder for a card we can't update
+    assert followup.tickets.pending(10) == []  # and no retry next time

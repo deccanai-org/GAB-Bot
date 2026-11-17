@@ -125,7 +125,7 @@ def test_throttle_request_goes_to_task_queries_contact(tmp_path):
     assert fields["Role"] == "annotator"
     assert content is None  # no mention configured, so nobody is pinged
     ((msg, private),) = i.followup.sent
-    assert private and "Amtul / Adiba" in msg
+    assert private and "project team" in msg and "Amtul" not in msg  # names stay on the card
     logged = json.loads((tmp_path / "support_requests.jsonl").read_text().splitlines()[0])
     assert logged["kind"] == "throttle" and logged["route"] == "task_qc"
 
@@ -255,7 +255,8 @@ def test_no_requests_channel_tells_the_asker_who_to_contact(tmp_path):
     desk, guild, ch, _ = setup(tmp_path, with_requests_channel=False)
     i = interaction(guild, ch["queries"])
     run(desk.handle_throttle(i, "need more tasks please", None, None))
-    assert "contact Amtul / Adiba" in i.response.sent[0][0]
+    assert "contact the admin of this project" in i.response.sent[0][0]
+    assert "Amtul" not in i.response.sent[0][0]
 
 
 def test_commands_are_registered_server_only():

@@ -23,9 +23,11 @@ import yaml
 from dotenv import load_dotenv
 
 from .model_limits import ModelLimits
+from .repeats import RepeatSettings
 from .routing import SupportSettings, check_route, parse_contacts
 from .runtime_config import RuntimeSettings
 from .search import SearchSettings
+from .topics import TopicSettings
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config.yaml"
@@ -259,6 +261,8 @@ def _support(section: dict | None) -> SupportSettings:
         max_attachment_mb=max(
             1, min(25, int(section.get("max_attachment_mb", d.max_attachment_mb)))
         ),
+        public_contact=str(section.get("public_contact") or d.public_contact).strip(),
+        payment_email=str(section.get("payment_email", d.payment_email) or "").strip(),
     )
 
 
@@ -282,6 +286,11 @@ class Settings:
     environment: str = "staging"  # staging (replies start with [TEST BOT]) | production
     max_history_messages: int = 4
     model_limits: ModelLimits = field(default_factory=ModelLimits)
+    # Same question asked again and again by one person (repeats.py).
+    repeat_limit: RepeatSettings = field(default_factory=RepeatSettings)
+    # Staff-only topics (throttle, payment, reset, not added, assessments) collected into one
+    # staff channel (topics.py).
+    topic_tracker: TopicSettings = field(default_factory=TopicSettings)
     knowledge_dir: Path = PROJECT_ROOT / "knowledge" / "current"
     # Where questions are logged. Same folder the rest of the bot saves its files in.
     log_dir: Path = Path("output")
@@ -338,6 +347,8 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         environment=environment,
         max_history_messages=int(faq.get("max_history_messages", 4)),
         model_limits=ModelLimits.parse(faq.get("model_limits")),
+        repeat_limit=RepeatSettings.parse(faq.get("repeat_limit")),
+        topic_tracker=TopicSettings.parse(faq.get("topic_tracker")),
         knowledge_dir=knowledge_dir,
         log_dir=Path(faq.get("log_dir") or cfg.get("output_dir") or "output"),
         discord=_platform(faq.get("discord")),

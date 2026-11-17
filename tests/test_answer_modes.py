@@ -571,7 +571,9 @@ def test_model_cannot_claim_actions_or_name_staff(corpus, outcome, field, text):
 
 
 def test_all_13_video_links_are_exact_and_attached_to_their_entries(knowledge):
-    catalog = yaml.safe_load((ROOT / "knowledge/current/playground-videos.yaml").read_text())
+    catalog = yaml.safe_load(
+        (ROOT / "tests/fixtures/knowledge-phase6/playground-videos.yaml").read_text()
+    )
     assert {v["id"]: v["url"] for v in catalog["videos"]} == VIDEO_URLS
     entries = list(entries_of(knowledge).values())
     for video_id, url in VIDEO_URLS.items():

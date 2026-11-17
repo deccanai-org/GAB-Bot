@@ -276,6 +276,15 @@ class Followup:
                 channel = await self._channel(ticket.staff_channel_id)
                 message = await channel.fetch_message(ticket.staff_message_id)
                 card = read_card(message)
+                me = getattr(self.bot, "user", None)
+                if card is not None and me is not None and message.author.id != me.id:
+                    # Posted by another bot (e.g. a different bot used the same output folder).
+                    # Discord won't let us edit it, so stop tracking it instead of retrying forever.
+                    log.warning(
+                        "[FAQ] Staff card for question %s was posted by another bot; not tracked",
+                        ticket.message_id,
+                    )
+                    card = None
                 if card is None:
                     await asyncio.to_thread(
                         self.tickets.status, ticket.channel_id, ticket.message_id, "missing"

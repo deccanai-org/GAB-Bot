@@ -7,6 +7,7 @@ import logging
 import re
 import sqlite3
 import threading
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 import discord
@@ -33,6 +34,13 @@ def section(channel) -> str:
     if isinstance(channel, discord.Thread):
         channel = channel.parent
     return getattr(getattr(channel, "category", None), "name", "")
+
+
+def watched(name: str, patterns) -> bool:
+    """True when a channel or section name is in config.yaml channel_names. Entries may use * for
+    any run of characters ("GAB Phase*" covers every phase); matching ignores case."""
+    key = name.casefold()
+    return key in patterns or any("*" in p and fnmatchcase(key, p) for p in patterns)
 
 
 def all_text_channels(guild) -> list:
@@ -196,7 +204,7 @@ class QueryService:
         if isinstance(channel, discord.Thread):
             return bool(channel.parent and self.is_watched(channel.parent))
         keys = [getattr(channel, "name", ""), section(channel)]
-        return any(key and key.casefold() in self.settings.watched_names for key in keys)
+        return any(key and watched(key, self.settings.watched_names) for key in keys)
 
     def watched_channels(self, guild) -> list:
         return [channel for channel in all_text_channels(guild) if self.is_watched(channel)]

@@ -9,6 +9,43 @@ from .contracts import Answer
 from .routing import SupportSettings, reply_line
 from .storage import JsonLines
 
+# What the asker can do next, by outcome: carry on with the bot's answer, or ask again in their own
+# words. Outcomes not listed (greetings, limits, refusals) get no such line.
+CARRY_ON = {
+    "answered": "If this doesn't fully answer your question, ask again with a bit more detail.",
+    "general": "If this doesn't fully answer your question, ask again with a bit more detail.",
+    "partial": (
+        "If this covers your question, you can carry on with it. If not, rephrase your question "
+        "with more detail and ask me again; a team member will also follow up."
+    ),
+    "not_in_faq": "You can also rephrase your question with more detail and ask me again.",
+    "needs_human": "You can also rephrase your question with more detail and ask me again.",
+    "error": "You can also try asking again in a minute.",
+}
+# Every reply except a greeting or a limit message ends by pointing to the announcements.
+NO_ANNOUNCEMENT_LINE = frozenset({"small_talk", "limited"})
+DEFAULT_ANNOUNCEMENTS = "the announcements channel"
+# Answer.via for a reply produced by the repeat limit (repeats.py): no "ask again" line under it.
+REPEAT_VIA = "repeat limit"
+
+
+def footer_lines(answer: Answer, announcements: str = DEFAULT_ANNOUNCEMENTS) -> str:
+    """The closing lines under a reply: what to do next, and the announcements reminder."""
+    lines = []
+    # Rephrasing can't change a reply decided by a rule: payment questions, action requests
+    # ("reset my environment") and the repeat limit. Those get no "ask again" line.
+    decided_by_rule = (
+        answer.via == REPEAT_VIA or answer.via.startswith("guard:") or answer.route == "payment"
+    )
+    if answer.outcome in CARRY_ON and not decided_by_rule:
+        lines.append(CARRY_ON[answer.outcome])
+    if answer.outcome not in NO_ANNOUNCEMENT_LINE:
+        lines.append(
+            f"📢 Please keep checking {announcements or DEFAULT_ANNOUNCEMENTS} for the latest "
+            "updates."
+        )
+    return "\n".join(lines)
+
 
 def format_reply(
     answer: Answer,
@@ -16,10 +53,12 @@ def format_reply(
     environment: str = "production",
     support: SupportSettings | None = None,
     mentions_allowed: bool = False,
+    announcements: str = DEFAULT_ANNOUNCEMENTS,
 ) -> str:
     """The chat message for an answer. When a person is needed, the contact line chosen by
-    routing.py (code, not the AI) is added. Contact mentions are added only if `mentions_allowed`
-    (Discord, with mention_contacts_in_replies on); otherwise the contact is named."""
+    routing.py (code, not the AI) is added; it points to the project admin, never to a named
+    person. Contact mentions are added only if `mentions_allowed` (Discord, with
+    mention_contacts_in_replies on). Every reply then ends with footer_lines()."""
     text = answer.text
     if answer.needs_escalation and support is not None and answer.route:
         text += "\n\n" + reply_line(
@@ -30,6 +69,9 @@ def format_reply(
         )
     if answer.needs_escalation and escalation_mention:
         text += f"\n\n{escalation_mention} could you help with this one?"
+    footer = footer_lines(answer, announcements)
+    if footer:
+        text += "\n\n" + footer
     if environment == "staging":
         text = "[TEST BOT] " + text
     return text

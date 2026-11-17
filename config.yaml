@@ -9,9 +9,11 @@
 channel_names:
   # A section (category) name means every channel in it. The GAB sections use the same
   # channel names (support, project-related-queries), so they are listed by section; the
-  # export's "section" column tells them apart. NEW PHASE: update these two names.
-  - Project GAB P6 Annotators Deployed
-  - Project GAB P6 QC Deployed
+  # export's "section" column tells them apart. A * matches any run of characters, so
+  # "GAB Phase*" covers every phase's sections ("GAB Phase 7 Conversation QC", "GAB Phase 8 ...")
+  # with no edit when a new phase starts.
+  - GAB Phase*
+  - project-gab-queries
   - general
   - announcements
   - coders-maitrix
@@ -334,8 +336,37 @@ gab_faq:
     summary_penalty: 0.15     # checklist entries rank this much lower unless the question asks for a checklist
 
   max_history_messages: 4
+  # One person asking the same question again and again: answered normally up to max_asks - 1
+  # times; the ask that reaches max_asks inside window_minutes is flagged to the team (one staff
+  # card) instead of answered, and later repeats get a short "already flagged" reply.
+  # max_asks: 0 turns this off.
+  repeat_limit:
+    max_asks: 3
+    window_minutes: 60
+
+  # Topic tracker: every message in a GAB channel (the only_in sections below) about one of these
+  # topics is collected into ONE staff channel, so the team sees who is asking for what. It reads
+  # every message, not only ones that @mention the bot. It never replies and pings nobody. The same
+  # person raising the same topic again within window_hours updates their card ("Times raised")
+  # instead of posting a new one. Make the channel private (staff only).
+  #   throttle    task limit / throttle increase
+  #   payment     the person's own pay
+  #   reset       environment reset
+  #   not_added   "why am I not added to Phase 7", no access to the phase
+  #   assessment  assessments, qualification / screening tests
+  topic_tracker:
+    enabled: true
+    channel: gab-staff-requests
+    # Optional: send a topic to its own channel instead, e.g. payment: gab-payment-requests
+    channels: {}
+    topics: [throttle, payment, reset, not_added, assessment]
+    # Optional extra words or phrases per topic (case-insensitive, whole words), e.g.
+    # assessment: ["quiz"]
+    extra_keywords: {}
+    window_hours: 24
+
   model_limits:
-    questions_per_day: 20        # per user, rolling 24 hours; persisted across restarts
+    questions_per_day: 20       # per user, rolling 24 hours; persisted across restarts
     questions_per_minute: 3      # shared across that user's channels
     max_prompt_bytes: 8000       # complete serialized UTF-8 request, including history and FAQ
     max_input_tokens: 2000       # planning estimate (bytes / 3); actual provider usage is logged
@@ -367,7 +398,9 @@ gab_faq:
     # The server has other projects too: outside these sections the bot ignores everything,
     # @mentions included.
     only_in:
-      - Project GAB*
+      # Only sections whose name starts with "GAB Phase" (e.g. "GAB Phase 7 Conversation
+      # Annotators", "GAB Phase 7 Evaluation"). Older "Project GAB ..." sections are not answered.
+      - GAB Phase*
       - project-gab-queries   # top-level channel (no category) in Deccan AI Community
     # Where the bot answers EVERY new message without being called. Empty: the bot answers only
     # when someone @mentions it (or replies to one of its messages with the ping on) in a GAB
@@ -377,10 +410,12 @@ gab_faq:
     # Off: in a DM the bot can't tell which project or role the person is in.
     answer_in_dms: false
     # Which FAQ to use. The two sections have the same channel names, so go by section.
+    # A section that matches neither list (e.g. "GAB Phase 7 Evaluation") is answered with role
+    # "unknown": entries for annotators and QC rank equally.
     annotator_channels:
-      - Project GAB* Annotators*
+      - GAB Phase* Annotator*
     qc_channels:
-      - Project GAB* QC*
+      - GAB Phase* QC*
     qm_channels: []           # only here does the bot use the internal QM documents
     # Every question the bot can't answer (or isn't sure about) is posted here as a card for the
     # team, with a "Mark as answered" button. Make it a private, staff-only channel.
@@ -394,7 +429,11 @@ gab_faq:
   followup:
     after_minutes: 60
     check_every_minutes: 5
-    reminder_channel: ""      # channel name or ID; empty = the unanswered-questions channel
+    # Two staff channels: new questions the bot couldn't answer go to unanswered_channel
+    # (faq-bot-unanswered) at once; questions still unanswered after after_minutes are listed
+    # here. Make it private (staff only). If it doesn't exist, reminders go to
+    # faq-bot-unanswered instead.
+    reminder_channel: faq-bot-followups
     # Who the reminder tags: "<@&ROLE_ID>" for a role (e.g. the GAB support team), "<@USER_ID>"
     # for a person; several separated by spaces. Empty = no one is tagged.
     reminder_mention: ""
@@ -419,6 +458,11 @@ gab_faq:
     # unanswered-questions channel above. Must be a private, staff-only channel.
     requests_channel: ""
     mention_contacts_in_replies: false # true: also tag the contact in the public reply
+    # Public replies never name a staff member: they say "contact <public_contact>". Names above
+    # are used only on the private staff cards and in direct messages to the staff.
+    public_contact: the admin of this project
+    # Payment questions are pointed to this mailbox first.
+    payment_email: support@deccanexperts.ai
     request_cooldown_seconds: 60       # per person, per command
     max_attachment_mb: 8               # per screenshot
 
