@@ -153,10 +153,10 @@ that reaches `max_asks` inside `window_minutes` is flagged once to the team inst
 of answered, and later repeats get a short "already flagged" reply.
 
 There are two staff channels. Unanswered FAQ questions get a staff card in
-`discord.unanswered_channel` (`faq-bot-unanswered`) at once, with a persistent
+`discord.unanswered_channel` (`gab-phase-faq-unanswered`) at once, with a persistent
 "Mark as answered" button. Questions still open after `followup.after_minutes`
 are listed in `followup.reminder_channel` (`faq-bot-followups`; if it doesn't
-exist, the reminder goes to `faq-bot-unanswered`). Make both channels private.
+exist, the reminder goes to `gab-phase-faq-unanswered`). Make both channels private.
 Each open card gets one reminder. Reminded cards keep
 checking for replies. The durable ticket index and persisted scan cursors keep old questions tracked
 across restarts and large histories.

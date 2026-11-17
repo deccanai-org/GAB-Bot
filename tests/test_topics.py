@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from gab_faq.config import Settings, _platform
+from gab_faq.config import FollowupSettings, Settings, _platform
 from gab_faq.discord_answers import FaqAnswerer
 from gab_faq.replies import QuestionLog
 from gab_faq.topics import TopicSettings, TopicTracker, match_topics
@@ -256,3 +256,70 @@ def test_the_shipped_config_puts_the_tracker_channel_in_gigis_scope():
     assert channel.startswith("gab-phase")
     assert settings.discord.in_scope(channel)
     assert settings.topic_tracker.enabled
+
+
+def test_staff_talk_in_the_unanswered_and_reminder_channels_is_never_tracked(tmp_path):
+    queries = FakeChannel("project-related-queries", 1, ANNOTATORS)
+    tracker_ch = FakeChannel("gab-phase-staff-requests", 3)
+    unanswered = FakeChannel("gab-phase-faq-unanswered", 6)
+    reminders = FakeChannel("gab-phase-faq-followups", 7)
+    guild = SimpleNamespace(id=1, text_channels=[queries, tracker_ch, unanswered, reminders])
+    bot = SimpleNamespace(user=BOT_USER, guilds=[guild], get_channel=lambda i: None)
+    settings = Settings(
+        enabled=True,
+        environment="production",
+        discord=_platform({**SCOPE, "unanswered_channel": "gab-phase-faq-unanswered"}),
+        followup=FollowupSettings(reminder_channel="gab-phase-faq-followups"),
+        topic_tracker=TopicSettings.parse({"enabled": True, "channel": "gab-phase-staff-requests"}),
+    )
+    answerer = FaqAnswerer(bot, settings, FakeBrain(), QuestionLog(tmp_path))
+    for channel in (unanswered, reminders):
+        note = FakeMessage("asked about payment and reset, checking", channel, guild)
+        assert run(answerer.topics.observe(note)) is False
+    assert tracker_ch.sent == []
+    # The same words from a freelancer in a GAB queries channel are tracked.
+    assert run(answerer.topics.observe(FakeMessage("my payment is late", queries, guild))) is True
+
+
+def test_the_shipped_config_keeps_staff_channels_in_scope_and_untracked():
+    from gab_faq.config import load_settings
+
+    settings = load_settings()
+    unanswered = settings.discord.unanswered_channel
+    assert unanswered == "gab-phase-faq-unanswered"
+    assert settings.discord.in_scope(unanswered)
+    tracker = TopicTracker(
+        SimpleNamespace(user=BOT_USER),
+        settings.topic_tracker,
+        settings.discord,
+        skip=(unanswered, settings.followup.reminder_channel),
+    )
+    assert unanswered in tracker._staff_channel_names()
+
+
+def test_the_faqs_export_channel_is_gab_phase_and_never_tracked(tmp_path):
+    from gab_faq.discord_bot.settings import BotSettings
+
+    from .conftest import ROOT
+
+    faq_channel = BotSettings.load(ROOT / "config.yaml").faq_channel
+    assert faq_channel == "gab-phase-faqs"
+    faqs = FakeChannel(faq_channel, 8)
+    tracker_ch = FakeChannel("gab-phase-staff-requests", 3)
+    guild = SimpleNamespace(id=1, text_channels=[faqs, tracker_ch])
+    bot = SimpleNamespace(
+        user=BOT_USER,
+        guilds=[guild],
+        get_channel=lambda i: None,
+        settings=SimpleNamespace(faq_channel=faq_channel),
+    )
+    settings = Settings(
+        enabled=True,
+        environment="production",
+        discord=_platform(SCOPE),
+        topic_tracker=TopicSettings.parse({"enabled": True, "channel": "gab-phase-staff-requests"}),
+    )
+    answerer = FaqAnswerer(bot, settings, FakeBrain(), QuestionLog(tmp_path))
+    note = FakeMessage("export of payment and reset questions", faqs, guild)
+    assert run(answerer.topics.observe(note)) is False
+    assert tracker_ch.sent == []

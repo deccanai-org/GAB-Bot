@@ -195,10 +195,13 @@ class _Open:
 
 
 class TopicTracker:
-    def __init__(self, bot, settings: TopicSettings, platform, clock=time.time):
+    def __init__(self, bot, settings: TopicSettings, platform, clock=time.time, skip=()):
         self.bot = bot
         self.settings = settings
         self.platform = platform  # PlatformSettings: which channels are in scope
+        # Other staff channels (names or IDs) whose messages are never tracked, e.g. the
+        # unanswered-questions and reminder channels: staff discussing a card there is not a request.
+        self.skip = tuple(skip)
         self.clock = clock
         self._open: dict[tuple, _Open] = {}
         self._lock = asyncio.Lock()
@@ -208,7 +211,7 @@ class TopicTracker:
         return self.settings.enabled and bool(self.settings.channel or self.settings.channels)
 
     def _staff_channel_names(self) -> set[str]:
-        names = {self.settings.channel, *self.settings.channels.values()}
+        names = {self.settings.channel, *self.settings.channels.values(), *self.skip}
         return {n.casefold() for n in names if n}
 
     async def observe(self, message) -> bool:

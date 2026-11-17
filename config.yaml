@@ -25,7 +25,9 @@ channel_names:
 # ── FAQ channel (output only) ─────────────────────────────────
 # /export may only be run here; the CSV is posted here. Does NOT need to be
 # in channel_names unless you also want messages from FAQ collected.
-faq_channel_name: "faqs"
+# GAB's own export channel. It starts with gab-phase, so Gigi also answers @mentions there
+# (gab_faq.discord.only_in: gab-phase*); the topic tracker never tracks messages in it.
+faq_channel_name: "gab-phase-faqs"
 
 # ── Historical backfill ───────────────────────────────────────
 # If false, the bot does NOT scan channel history on startup — only /export
@@ -423,8 +425,10 @@ gab_faq:
       - GAB Phase* QC*
     qm_channels: []           # only here does the bot use the internal QM documents
     # Every question the bot can't answer (or isn't sure about) is posted here as a card for the
-    # team, with a "Mark as answered" button. Make it a private, staff-only channel.
-    unanswered_channel: faq-bot-unanswered
+    # team, with a "Mark as answered" button. Make it a private, staff-only channel. It starts with
+    # gab-phase, so it is in scope (only_in: gab-phase*): Gigi answers @mentions there, and the
+    # topic tracker never tracks messages posted in it.
+    unanswered_channel: gab-phase-faq-unanswered
     # Optional: who to tag in the reply when the bot can't answer.
     # "<@USER_ID>" for a person, "<@&ROLE_ID>" for a role. Leave "" to not tag anyone.
     escalation_mention: ""
@@ -435,9 +439,9 @@ gab_faq:
     after_minutes: 60
     check_every_minutes: 5
     # Two staff channels: new questions the bot couldn't answer go to unanswered_channel
-    # (faq-bot-unanswered) at once; questions still unanswered after after_minutes are listed
+    # (gab-phase-faq-unanswered) at once; questions still unanswered after after_minutes are listed
     # here. Make it private (staff only). If it doesn't exist, reminders go to
-    # faq-bot-unanswered instead.
+    # gab-phase-faq-unanswered instead.
     reminder_channel: faq-bot-followups
     # Who the reminder tags: "<@&ROLE_ID>" for a role (e.g. the GAB support team), "<@USER_ID>"
     # for a person; several separated by spaces. Empty = no one is tagged.

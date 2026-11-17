@@ -145,7 +145,18 @@ class FaqAnswerer:
         self._delivery_locks = WeakValueDictionary()
         self.followup = Followup(self, settings.followup)
         self.repeats = RepeatTracker(settings.repeat_limit)
-        self.topics = TopicTracker(bot, settings.topic_tracker, settings.discord)
+        self.topics = TopicTracker(
+            bot,
+            settings.topic_tracker,
+            settings.discord,
+            # Staff channels: the unanswered cards, the reminders and the /export channel
+            # (bot.settings is the Discord app's settings; absent in some tests).
+            skip=(
+                settings.discord.unanswered_channel,
+                settings.followup.reminder_channel,
+                getattr(getattr(bot, "settings", None), "faq_channel", ""),
+            ),
+        )
 
     async def start(self) -> None:
         """Called during application setup."""
