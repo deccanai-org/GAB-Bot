@@ -356,7 +356,9 @@ gab_faq:
   #   assessment  assessments, qualification / screening tests
   topic_tracker:
     enabled: true
-    channel: gab-staff-requests
+    # Starts with gab-phase, so Gigi also answers @mentions there (only_in: gab-phase*); the
+    # tracker never tracks messages in its own channel.
+    channel: gab-phase-staff-requests
     # Optional: send a topic to its own channel instead, e.g. payment: gab-payment-requests
     channels: {}
     topics: [throttle, payment, reset, not_added, assessment]
@@ -401,6 +403,9 @@ gab_faq:
       # Only sections whose name starts with "GAB Phase" (e.g. "GAB Phase 7 Conversation
       # Annotators", "GAB Phase 7 Evaluation"). Older "Project GAB ..." sections are not answered.
       - GAB Phase*
+      # Channels whose own name starts with gab-phase (Discord channel names use hyphens, so
+      # "GAB Phase*" above doesn't match them), e.g. the staff channel gab-phase-staff-requests.
+      - gab-phase*
       - project-gab-queries   # top-level channel (no category) in Deccan AI Community
     # Where the bot answers EVERY new message without being called. Empty: the bot answers only
     # when someone @mentions it (or replies to one of its messages with the ping on) in a GAB

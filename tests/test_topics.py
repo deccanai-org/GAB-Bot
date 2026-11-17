@@ -15,7 +15,10 @@ from .test_discord_answers import BOT_USER, FakeBrain, FakeChannel, FakeMessage
 
 ANNOTATORS = SimpleNamespace(name="GAB Phase 7 Conversation Annotators", id=900)
 OTHER = SimpleNamespace(name="Some Other Project", id=901)
-SCOPE = {"only_in": ["GAB Phase*"], "annotator_channels": ["GAB Phase* Annotator*"]}
+SCOPE = {
+    "only_in": ["GAB Phase*", "gab-phase*"],
+    "annotator_channels": ["GAB Phase* Annotator*"],
+}
 
 
 def run(coro):
@@ -91,11 +94,11 @@ class Author:
 def make(channels=None, window_hours=24, **section):
     queries = FakeChannel("project-related-queries", 1, ANNOTATORS)
     other = FakeChannel("project-related-queries", 2, OTHER)
-    tracker = FakeChannel("gab-staff-requests", 3)
+    tracker = FakeChannel("gab-phase-staff-requests", 3)
     payments = FakeChannel("gab-payment-requests", 4)
     guild = SimpleNamespace(id=1, text_channels=[queries, other, tracker, payments], me=None)
     clock = SimpleNamespace(now=1_000_000.0)
-    cfg = {"enabled": True, "channel": "gab-staff-requests", "window_hours": window_hours}
+    cfg = {"enabled": True, "channel": "gab-phase-staff-requests", "window_hours": window_hours}
     cfg.update(section)
     if channels:
         cfg["channels"] = channels
@@ -197,7 +200,7 @@ def test_off_by_default():
 
 def test_the_bot_still_answers_and_tracks_the_same_message(tmp_path):
     queries = FakeChannel("project-related-queries", 1, ANNOTATORS)
-    tracker_ch = FakeChannel("gab-staff-requests", 3)
+    tracker_ch = FakeChannel("gab-phase-staff-requests", 3)
     unanswered = FakeChannel("faq-bot-unanswered", 6)
     guild = SimpleNamespace(id=1, text_channels=[queries, tracker_ch, unanswered])
     bot = SimpleNamespace(user=BOT_USER, guilds=[guild], get_channel=lambda i: None)
@@ -205,7 +208,7 @@ def test_the_bot_still_answers_and_tracks_the_same_message(tmp_path):
         enabled=True,
         environment="production",
         discord=_platform({**SCOPE, "unanswered_channel": "faq-bot-unanswered"}),
-        topic_tracker=TopicSettings.parse({"enabled": True, "channel": "gab-staff-requests"}),
+        topic_tracker=TopicSettings.parse({"enabled": True, "channel": "gab-phase-staff-requests"}),
     )
     brain = FakeBrain()
     answerer = FaqAnswerer(bot, settings, brain, QuestionLog(tmp_path))
@@ -218,3 +221,38 @@ def test_the_bot_still_answers_and_tracks_the_same_message(tmp_path):
     titles = [k["embed"].title for _, k in tracker_ch.sent]
     assert titles == ["Throttle / task limit", "Environment reset"]
     assert "<@999>" not in tracker_ch.sent[1][1]["embed"].fields[3].value
+
+
+def test_messages_in_the_tracker_channel_itself_are_not_tracked():
+    tracker, guild, ch = make()
+    assert run(tracker.observe(msg("increase my task limit", ch.tracker, guild))) is False
+    assert ch.tracker.sent == []
+
+
+def test_gigi_answers_mentions_in_the_gab_phase_staff_channel_without_tracking_them(tmp_path):
+    staff = FakeChannel("gab-phase-staff-requests", 3)
+    unanswered = FakeChannel("faq-bot-unanswered", 6)
+    guild = SimpleNamespace(id=1, text_channels=[staff, unanswered])
+    bot = SimpleNamespace(user=BOT_USER, guilds=[guild], get_channel=lambda i: None)
+    settings = Settings(
+        enabled=True,
+        environment="production",
+        discord=_platform({**SCOPE, "unanswered_channel": "faq-bot-unanswered"}),
+        topic_tracker=TopicSettings.parse({"enabled": True, "channel": "gab-phase-staff-requests"}),
+    )
+    brain = FakeBrain()
+    answerer = FaqAnswerer(bot, settings, brain, QuestionLog(tmp_path))
+    m = FakeMessage("<@999> how do I reset the environment?", staff, guild, mentions=[BOT_USER])
+    assert run(answerer.handle(m)) is True
+    assert brain.calls == [("how do I reset the environment?", "unknown")]
+    assert all("embed" not in k for _, k in staff.sent)  # a reply, not a tracker card
+
+
+def test_the_shipped_config_puts_the_tracker_channel_in_gigis_scope():
+    from gab_faq.config import load_settings
+
+    settings = load_settings()
+    channel = settings.topic_tracker.channel
+    assert channel.startswith("gab-phase")
+    assert settings.discord.in_scope(channel)
+    assert settings.topic_tracker.enabled
