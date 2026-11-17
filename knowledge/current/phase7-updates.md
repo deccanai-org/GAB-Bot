@@ -3,7 +3,7 @@ title: Phase 7.1 updates - announcements and team answers (annotation)
 audience: all
 phase: 7
 updated: 2026-11-17
-source: 'GAB Phase 7 #announcements (Annotators, QC, Evaluation) and team answers in GAB Phase 7 Conversation Annotators #project-related-queries, 16-17 Nov 2026 (all 401 messages read 17 Nov 2026, 15:50 IST)'
+source: 'GAB Phase 7 #announcements (Annotators, QC, Evaluation) and team answers in GAB Phase 7 Conversation Annotators #project-related-queries, 16-17 Nov 2026 (all 401 messages read 17 Nov 2026, 15:50 IST; announcements up to 18:06 IST)'
 ---
 
 ## Models and thinking level
@@ -20,10 +20,13 @@ Refresh the Cosmo platform page: the form was updated. In the form, tick the mod
 S4. The model or thinking level changes back after every turn. What do I do?
 Reload the page and try again. Before every turn, check that the right model and thinking level are selected, and set them back if they changed. If you set them back correctly before every turn, your task is fine. A thinking level (HIGH) is set only for Product A; the instructions give no thinking level for Product B, so for Model B just select 3.8 Flash-Lite (Model Underwing).
 
+S25. Which tab do I use for the conversation? Can I use a different tab instead of Chat? What if a task was done in another tab?
+Use the Chat tab only, for both products, in Phase 7.1. Do not use any other tab: a task done in a different tab has to be redone.
+
 ## Screen recording
 
 S5. Do I record each model separately? When do I start and stop?
-Screen recording is mandatory in Phase 7.1. Record each model separately. Start recording when you send your first prompt (the seed prompt) and stop only after the final model response. Keep recording while you type your prompts: the whole interaction must be recorded, and no interaction may be missed. Pause the recording when you switch tabs to look at the instructions or Cosmo. Keep recording for the whole model run, even if it takes 50 minutes or more. "First prompt" means the seed prompt, not a "What have we been working on?" check. If you recorded the entire screen instead of only the conversation tab, redo the recording.
+Screen recording is mandatory in Phase 7.1. Record each model separately. Start the recording from the model selection step, before the seed prompt, so it clearly shows the model and Thinking Level you selected (this is how QC verifies the settings), and stop only after the final model response. Keep recording while you type your prompts: the whole interaction must be recorded, and no interaction may be missed. Pause the recording when you switch tabs to look at the instructions or Cosmo. Keep recording for the whole model run, even if it takes 50 minutes or more. If you recorded the entire screen instead of only the conversation tab, redo the recording.
 
 S6. Which tool can I use to record the screen?
 Any built-in recording tool of your computer is fine, for example Clipchamp or the Snipping Tool (Windows + Shift + R) on Windows, or Command + Shift + 5 on a Mac. Clipchamp is not required: any built-in tool is fine. Do not use external or third-party recording tools.
@@ -72,7 +75,7 @@ New tasks are assigned after your submitted task has been through QC; if the que
 ## Starting the conversation
 
 S20. Do I ask "What have we been working on?" before the seed prompt?
-It's optional. The instructions doc doesn't require it, so you can start straight with the seed prompt (see the "How to converse with the Models" tab). You may also ask it first as a memory check, as shown in the walkthrough video: ask it, then send the seed prompt in a fresh chat. Your screen recording starts at the seed prompt, so the memory check doesn't need to be recorded.
+It's optional. The instructions doc doesn't require it, so you can start straight with the seed prompt (see the "How to converse with the Models" tab). You may also ask it first as a memory check, as shown in the walkthrough video: ask it, then send the seed prompt in a fresh chat. Your screen recording starts from the model selection step of the conversation you submit (see S5).
 
 S21. I asked "What have we been working on?" and the model described earlier work. What do I do?
 If what it describes is not related to the current task, leave that chat and start the conversation in a fresh chat. If it is related to the current task, proceed with the task in a fresh chat, and flag it in Conversation Context if the model brings up the earlier work during the current task.

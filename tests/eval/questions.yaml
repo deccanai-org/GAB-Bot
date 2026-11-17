@@ -168,3 +168,18 @@
   outcome: [answered]
   must_include_any: [Reload, reload]
   critical: false
+
+- id: recording-start-model-selection
+  role: annotator
+  question: When do I start the screen recording?
+  outcome: [answered]
+  must_include_any: [model selection]
+  must_not_include: [starts at the seed prompt]
+  critical: false
+
+- id: chat-tab-only
+  role: annotator
+  question: Can I use a different tab instead of Chat for Product B?
+  outcome: [answered]
+  must_include_any: [Chat tab]
+  critical: false

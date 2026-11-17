@@ -15,7 +15,7 @@ V2. What if the model keeps switching during the conversation?
 Switching has been observed. Check the model before every turn, and if it has switched, switch it back to the right model (Model A: 3.5 Flash-Lite, Model B: 3.8 Flash-Lite -> Model Underwing) before you send the next turn. A different model in the conversation leads to task rejection.
 
 V3. Is screen recording required in Phase 7?
-Yes. Screen recording is required in Phase 7. Record the whole interaction with the model: start when you send the first prompt and stop after the last model response. Record only the tab with the conversation, and upload the recording in the Screen Recording field. See V29-V31 for how to record.
+Yes. Screen recording is required in Phase 7. Record the whole interaction with the model: start from the model selection step, so the selected model and Thinking Level are visible (announcement, 17 Nov 2026), and stop after the last model response. Record only the tab with the conversation, and upload the recording in the Screen Recording field. See V29-V31 for how to record.
 
 V4. Do I reset the environment in Phase 7? Do I work on Model B?
 Yes to both. Run Model A first, then reset the environment and paste the Reset ID in the tasking platform, then run Model B. See V20 for the reset steps.
@@ -106,7 +106,7 @@ Only send what the persona would type. Never send tool or status text such as "A
 ## Screen recording
 
 V29. What exactly do I record, and why?
-Record the whole interaction with the model, from the first prompt to the last model response. Record only the tab with the conversation, not the whole screen and not tab switches to Cosmo. The recording is used to understand the latency of model responses. Scroll at a moderate pace while reading long answers: quick scrolling suggests you are not reading the responses. Upload the recording in the Screen Recording field.
+Record the whole interaction with the model, from the model selection step (so the selected model and Thinking Level are visible; announcement, 17 Nov 2026) to the last model response. Record only the tab with the conversation, not the whole screen and not tab switches to Cosmo. The recording is used to understand the latency of model responses. Scroll at a moderate pace while reading long answers: quick scrolling suggests you are not reading the responses. Upload the recording in the Screen Recording field.
 
 V30. How do I record only the conversation window on a Mac?
 Press Command + Shift + 5, click "Record Selected Window", click the browser window with the conversation, then click Record. To stop, click the stop button in the menu bar or press Command + Control + Escape. Mac recording captures the whole browser window rather than a single tab, so keep the conversation in its own window.
