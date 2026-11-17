@@ -2,8 +2,8 @@
 title: Phase 7.1 QC updates - thinking level checks and feedback
 audience: qc
 phase: 7
-updated: 2026-11-17
-source: 'GAB Phase 7 Conversation QC #announcements and team answers in #project-related-queries, 17 Nov 2026 (all 57 messages read 17 Nov 2026, 15:50 IST; team answers up to 22:40 IST; all messages re-read 17 Nov 2026, 22:50 IST)'
+updated: 2026-11-18
+source: 'GAB Phase 7 Conversation QC #announcements and team answers in #project-related-queries, 17 Nov 2026 (all 57 messages read 17 Nov 2026, 15:50 IST; team answers up to 22:40 IST; all messages re-read 17 Nov 2026, 22:50 IST; all messages from 22:40 IST on 17 Nov to 04:05 IST on 18 Nov read 18 Nov 2026, 04:40 IST)'
 ---
 
 ## Thinking level of Product A
@@ -46,3 +46,19 @@ Yes: assign it back for rework to the same annotator.
 
 QC11. Only one artifact file is missing (for example, one Model B file) and there are no other issues. Do I reject?
 No: if nothing else is wrong, add the missing file and mark the task acceptable. If required files such as the debug, the recording or the share link are missing or empty, follow QC9.
+
+## Checking the conversation
+
+QC12. The debug info shows an email was sent successfully and the conversation says "Message sent". Do I also need to check the Gmail Sent folder?
+Yes, check in Gmail as well that the email was sent.
+
+QC13. The last message of the conversation, a closing message such as "All done, thanks!", isn't in the screen recording. Is that a problem?
+No, that's fine as long as all the required turns are included in the recording.
+
+QC14. The first prompt of the conversation is a memory check such as "Do you remember our conversation?". Do I ignore it?
+Yes, ignore it and proceed with the review. Asking the model about earlier work before the seed prompt is optional for annotators (S20).
+
+## QC tasks
+
+QC15. "Start New Task" says "No pending tasks are available for you" in QC. Are there QC tasks left? Are there ML or coding QC tasks?
+Reload the page and check again; the team adds QC tasks as annotation submissions come in. On 18 Nov 2026 (about 1 AM IST) the team said only generalist tasks were left for QC, with no ML or coding QC tasks at that time. To ask for a higher QC task limit, contact the admin of this project.

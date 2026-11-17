@@ -225,3 +225,21 @@
   outcome: [answered]
   must_include_any: [acceptable]
   critical: false
+- id: separate-recordings
+  role: annotator
+  question: Should I submit one long video covering Model A and Model B, or two separate videos?
+  outcome: [answered]
+  must_include_any: [separate, Separate]
+  critical: false
+- id: reset-already-running
+  role: annotator
+  question: 'The reset fails with "Could not start reset: a reset is already running for this account". What do I do?'
+  outcome: [answered]
+  must_include_any: [again]
+  critical: false
+- id: qc-check-gmail-sent
+  role: qc
+  question: The debug info shows the email was sent and the conversation says "Message sent". Do I need to check the Gmail Sent folder?
+  outcome: [answered]
+  must_include_any: [Gmail]
+  critical: false

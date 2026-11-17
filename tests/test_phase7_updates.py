@@ -297,6 +297,17 @@ def test_phase7_file_parses_with_unique_numbered_entries():
         ("what is the payout cap from phase 7.2", "annotator", {"S33"}),
         ("is the 20% increment still going on", "annotator", {"S34"}),
         ("only one artifact file from model B is missing, everything else is fine", "qc", {"QC11"}),
+        ("should I submit one video for model A and model B or two separate videos", "annotator", {"S5"}),
+        ("the last thank you message isn't in the screen recording", "annotator", {"S7"}),
+        ("debug info panel is empty for the first two turns even though debug was generated", "annotator", {"S10"}),
+        ("phase 7.2 tasks are not visible on my dashboard", "annotator", {"S23"}),
+        ("my rework expired, can it be reassigned to me", "annotator", {"S27"}),
+        ("reset says a reset is already running for this account", "annotator", {"S35"}),
+        ("while resetting the environment it says this account is not allowed to sign in", "annotator", {"S36"}),
+        ("debug info says the email was sent, do I need to check gmail sent folder", "qc", {"QC12"}),
+        ("the last appreciation message is not recorded in the video", "qc", {"QC13"}),
+        ("turn 1 prompt is do you remember our conversation, should I ignore it", "qc", {"QC14"}),
+        ("are there ML or coding tasks in the QC queue", "qc", {"QC15"}),
     ],
 )
 def test_phase7_team_answers_reach_their_entries(current_knowledge, question, role, expected):
