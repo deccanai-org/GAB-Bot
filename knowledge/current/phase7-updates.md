@@ -3,7 +3,7 @@ title: Phase 7.1 updates - announcements and team answers (annotation)
 audience: all
 phase: 7
 updated: 2026-11-17
-source: 'GAB Phase 7 #announcements (Annotators, QC, Evaluation) and team answers in GAB Phase 7 Conversation Annotators #project-related-queries, 16-17 Nov 2026 (all 401 messages read 17 Nov 2026, 15:50 IST; announcements up to 18:06 IST)'
+source: 'GAB Phase 7 #announcements (Annotators, QC, Evaluation) and team answers in GAB Phase 7 Conversation Annotators #project-related-queries, 16-17 Nov 2026 (all 401 messages read 17 Nov 2026, 15:50 IST; announcements and team answers up to 22:40 IST; all Annotators and QC #project-related-queries messages from 10:40 to 22:40 IST re-read 17 Nov 2026, 22:50 IST)'
 ---
 
 ## Models and thinking level
@@ -12,13 +12,13 @@ S1. What thinking level do I use? Which models are used in Phase 7.1 and 7.2?
 Phase 7.1 compares two Gemini products. Product A: 3.5 Flash-Lite with Thinking level HIGH. Product B: 3.8 Flash-Lite (Model Underwing). Phase 7.2 (Gemini vs Claude) has not started yet; when it does, all its conversations use Haiku 5.5 Medium with the default Thinking Mode only. Use these configurations consistently.
 
 S2. I can't find "3.8 Flash-Lite" for Model B, only "Flash-Lite -> Model Underwing". Is that right?
-Yes. "Flash-Lite -> Model Underwing" is the correct Model B; it is shown that way in the screenshot in the instructions doc. Look for it in work mode.
+Yes. "Flash-Lite -> Model Underwing" is the correct Model B; it is shown that way in the screenshot in the instructions doc. In the Chat tab (see S25), open the Flash-Lite option: the versions are listed under it, and Model B is 3.8 Flash-Lite -> Model Underwing. If you can't find it in the Chat tab, tell the team in #project-related-queries.
 
 S3. The task form shows the wrong model (3.8 for Model A, or asks for a Claude Haiku share link for Model B, or says "Add a valid Model B share link (claude.ai)"). What do I do?
 Refresh the Cosmo platform page: the form was updated. In the form, tick the model checkbox and select the model the instructions name; any screenshot shared in the channel is only an example. Always follow the instructions doc: Model A is 3.5 Flash-Lite and Model B is 3.8 Flash-Lite -> Model Underwing, both Gemini. If you already ran a conversation on the wrong model, it's better to redo it.
 
 S4. The model or thinking level changes back after every turn. What do I do?
-Reload the page and try again. Before every turn, check that the right model and thinking level are selected, and set them back if they changed. If you set them back correctly before every turn, your task is fine. A thinking level (HIGH) is set only for Product A; the instructions give no thinking level for Product B, so for Model B just select 3.8 Flash-Lite (Model Underwing).
+Reload the page and try again. Before every turn, check that the right model and thinking level are selected, and set them back if they changed. If you set them back correctly before every turn, your task is fine. The model and thinking level can change during the conversation, so verify them throughout the task: a task where Product A ran on a lower thinking level or the model switched is rejected. A thinking level (HIGH) is set only for Product A; the instructions give no thinking level for Product B, so for Model B just select 3.8 Flash-Lite (Model Underwing).
 
 S25. Which tab do I use for the conversation? Can I use a different tab instead of Chat? What if a task was done in another tab?
 Use the Chat tab only, for both products, in Phase 7.1. Do not use any other tab: a task done in a different tab has to be redone.
@@ -70,7 +70,7 @@ S18. The Drive files don't match the prompt or the persona. What do I do?
 Pause the task and report it to the team with your task (alloc) ID and test account, so they can check it.
 
 S19. When do I get more tasks, and when does my task limit go up?
-New tasks are assigned after your submitted task has been through QC; if the queue is empty, wait for new tasks on the platform. QC for Phase 7.1 runs after the annotation for the phase, so most contributors keep their initial number of tasks until then. A contributor's task limit is increased depending on the quality of their work. Keep checking the platform for feedback and reworks, and when you get feedback, check it carefully and verify the model's thinking level.
+New tasks are assigned after your submitted task has been through QC, and QC can take some time, so please wait; if the queue is empty, wait for new tasks on the platform. QC for Phase 7.1 runs after the annotation for the phase, so most contributors keep their initial number of tasks until then. A contributor's task limit is increased depending on the quality of their work. Keep checking the platform for feedback and reworks, and when you get feedback, check it carefully and verify the model's thinking level.
 
 ## Starting the conversation
 
@@ -90,3 +90,36 @@ Not yet. Phase 7.2 (Gemini vs Claude, Haiku 5.5 Medium) will start soon; the sta
 
 S24. My task was auto-skipped (for example, the timer ran out while it was paused). Can I get a new task?
 Tasks come from the queue: when it is empty, you have to wait for new tasks on the platform. For your own task's status, contact the admin of this project.
+
+## Rework
+
+S26. My task came back for rework (wrong thinking level or wrong tab). Do I redo only Model A, or both? Do I reset?
+Fix both conversations as per the instructions: Product A on 3.5 Flash-Lite with Thinking level HIGH, Product B on 3.8 Flash-Lite -> Model Underwing, both in the Chat tab. Don't delete the previous turns: reset the environment and start again, and reset it again after the Model A run, as in a normal task.
+
+S27. Where do I find my rework? I don't see a rework option. Do rework tasks expire?
+Check whether the task has been reassigned to you: a reworkable task shows the rework option in the tasking studio. If it has been reassigned to you, claim it and complete it as soon as possible: rework tasks expire, so don't miss them. If it isn't there, the task may have been reassigned to another annotator; for your own task's status, contact the admin of this project.
+
+S28. One of my tasks was rejected. Will I be removed from the project?
+No, one rejected task doesn't remove you from the project. Follow the instructions carefully, so that further rejections, and removal, are avoided.
+
+S29. Why wasn't I added to Phase 7.1? I couldn't work on 7.1; will I still be eligible?
+Contributors for this phase were selected based on the quality of their work in earlier phases. If you couldn't work on 7.1, the team will let you know if there is a requirement. For your own case, contact the admin of this project.
+
+## Tasks and assessment
+
+S30. "Start New Task" says "No pending tasks are available for you", even though I can see tasks. Is the task queue empty? Are all tasks exhausted?
+Reload the page and check again. If it still says there are no pending tasks, there are no tasks for you at the moment: on 17 Nov 2026 (9:20-10:30 PM IST) the team said the generalist annotation tasks were exhausted. This was about annotation tasks only, not QC: a few QC tasks were still available. Check whether a rework has been assigned to you (see S27), and keep checking the announcements channel for new tasks. For your own account or task limit, contact the admin of this project.
+
+S31. My evaluation (assessment) task names a model, for example Gemini 3.6 Flash, that the tasking account doesn't have. What do I do?
+If you can't see the model named in the instructions, move forward with a model that is available in the account, as this is an assessment.
+
+S32. My task was rejected for the thinking level (or the model), but I selected HIGH and it shows in my screen recording. What do I do?
+Share the allocation ID of the task with the admin of this project; they may ask you to share the screen recording in a DM. In future tasks, check the model and thinking level throughout the conversation (see S4).
+
+## Pay structure (announcements)
+
+S33. Is there a payout cap from Phase 7.2? Will every task be paid $150?
+From Phase 7.2 onwards, a payout cap of $150 per task, per stage applies, for all stages (including Conversation, CQC and Evals). This doesn't mean every task or conversation is paid $150: you are paid according to the pay structure of each stage. For example, if the calculated payout for a task is $100, you receive $100, not $150. For your own payment, mail support@deccanexperts.ai.
+
+S34. Is the 20% increment still going on?
+No, the 20% increment was only for Phase 6.

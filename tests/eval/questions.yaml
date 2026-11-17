@@ -183,3 +183,45 @@
   outcome: [answered]
   must_include_any: [Chat tab]
   critical: false
+
+- id: rework-both-products
+  role: annotator
+  question: My task came back for rework because of the thinking level. Do I redo only Model A or both?
+  outcome: [answered]
+  must_include_any: [both]
+  critical: false
+
+- id: qc-task-tab-rating
+  role: qc
+  question: The annotator did everything right but used the Task tab for Model B. What do I do?
+  outcome: [answered]
+  must_include_any: [reassign]
+  critical: false
+
+- id: no-pending-tasks
+  role: annotator
+  question: Start New Task says "No pending tasks are available for you". What do I do?
+  outcome: [answered]
+  must_include_any: [reload, Reload]
+  critical: false
+
+- id: qc-debug-missing-turn
+  role: qc
+  question: The debug JSON is missing a turn, but the recording is complete and the model didn't stop. Do I send it back?
+  outcome: [answered]
+  must_include_any: [same annotator]
+  critical: false
+
+- id: rejected-but-high-in-recording
+  role: annotator
+  question: My task was rejected for the thinking level, but I selected HIGH and it shows in my recording. What do I do?
+  outcome: [answered]
+  must_include_any: [allocation ID, allocation id]
+  critical: false
+
+- id: qc-one-artifact-missing
+  role: qc
+  question: Only one artifact file from Model B is missing and there are no other issues. Do I reject?
+  outcome: [answered]
+  must_include_any: [acceptable]
+  critical: false
