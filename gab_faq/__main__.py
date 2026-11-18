@@ -29,6 +29,7 @@ from pathlib import Path
 from .config import CONFIG_PATH, load_environment, load_settings
 from .engine import build_engine, describe
 from .knowledge import KnowledgeBase, build_knowledge
+from .knowledge_store import redact_location
 from .model_limits import answer_as_user
 from .replies import QuestionLog, format_reply
 from .storage import configure_logging
@@ -63,7 +64,8 @@ def check(settings, knowledge: KnowledgeBase) -> int:
     )
     if settings.knowledge_store:
         print(
-            f"Knowledge database: {settings.knowledge_store} (built-in fallback: {settings.knowledge_dir})"
+            f"Knowledge database: {redact_location(settings.knowledge_store)} "
+            f"(built-in fallback: {settings.knowledge_dir})"
         )
     print(f"FAQ files loaded from {knowledge.directory}:")
     for doc in knowledge.documents:

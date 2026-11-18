@@ -18,6 +18,7 @@ from gab_faq.admin.pdf_import import (  # noqa: E402
     clean_lines,
     draft_markdown,
     extract_pages,
+    page_text,
     structure,
 )
 from gab_faq.knowledge import KnowledgeBase  # noqa: E402
@@ -369,3 +370,79 @@ def test_encrypted_and_oversized_inputs_are_reported_not_crashed():
     with pytest.raises(PdfImportError):
         extract_pages(b"%PDF-1.4\n")
     assert date.today().isoformat() in draft_markdown("T", "t.pdf", ["Why?\nBecause."], set())
+
+
+# ---- extraction robustness (found by re-testing real PDFs after a pypdf upgrade) -------------
+def make_word_positioned_pdf(lines: list[str]) -> bytes:
+    """Every word placed with its own text matrix. (This synthetic form does NOT reproduce the
+    one-word-per-line output the real guideline PDFs gave with pypdf 6.21; that case is covered
+    through page_text() below. It checks that individually placed words still become lines.)"""
+    ops = ["BT", "/F1 12 Tf"]
+    for row, line in enumerate(lines):
+        for column, word in enumerate(line.split()):
+            ops.append(f"1 0 0 1 {72 + 55 * column} {720 - 16 * row} Tm ({word}) Tj")
+    ops.append("ET")
+    stream = "\n".join(ops).encode("latin-1")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+        b"/Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = b"%PDF-1.4\n"
+    offsets = []
+    for number, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % offset for offset in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objects) + 1,
+        xref,
+    )
+    return out
+
+
+def test_words_placed_individually_are_still_read_as_whole_lines():
+    pages = extract_pages(
+        make_word_positioned_pdf(
+            ["Which model is Product A?", "Use the flash model for the first turn."]
+        )
+    )
+    lines = [" ".join(line.split()) for line in pages[0].splitlines() if line.strip()]
+    assert lines == ["Which model is Product A?", "Use the flash model for the first turn."]
+    text = draft_markdown("Models", "m.pdf", pages, set())
+    assert validate_document("models.md", text).ok
+    assert "Which model is Product A?" in text and "Use the flash model" in text
+
+
+def test_common_words_repeated_on_every_page_are_never_dropped():
+    pages = [f"the\nto\nand\nPage text number {i}.\nGAB Confidential Header" for i in range(1, 6)]
+    cleaned = clean_lines(pages)
+    assert cleaned.count("the") == 5 and cleaned.count("to") == 5 and cleaned.count("and") == 5
+    assert "GAB Confidential Header" not in cleaned  # a real running header still goes
+
+
+def test_layout_extraction_falls_back_to_the_default_when_it_fails_or_is_empty():
+    class Page:
+        def __init__(self, layout):
+            self.layout = layout
+
+        def extract_text(self, extraction_mode="plain"):
+            if extraction_mode == "layout":
+                if isinstance(self.layout, Exception):
+                    raise self.layout
+                return self.layout
+            return "plain text"
+
+    assert page_text(Page("laid out text")) == "laid out text"
+    assert page_text(Page("   \n ")) == "plain text"
+    assert page_text(Page(RuntimeError("odd page"))) == "plain text"
+
+
+def test_an_answer_marker_after_the_question_is_not_kept_in_the_answer():
+    entries = _entries(structure(["Which model is Product A?", "A: Use flash."], "Doc", "D"))
+    assert [(e.title, e.body) for e in entries] == [("Which model is Product A?", "Use flash.")]

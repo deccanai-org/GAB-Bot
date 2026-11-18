@@ -2,7 +2,8 @@
 
 Two sides use it:
 
-  * The admin UI writes drafts, publishes, archives, deletes and rolls back (SqliteKnowledgeStore).
+  * The admin UI writes drafts, publishes, archives, deletes and rolls back. It talks to a
+    PostgreSQL database (PostgresKnowledgeStore) or, on one machine, a SQLite file.
   * The bot only reads it. StoreSource copies the published documents into a local folder and the
     existing KnowledgeBase reads that folder exactly as before (same parsing, approval policy,
     secret scan and search index). So a database problem can never make the bot worse than "keeps
@@ -14,6 +15,7 @@ Nothing is ever sent to Qwen unless the PM ticked that document's external-proce
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import re
@@ -24,6 +26,7 @@ import time
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -168,27 +171,160 @@ class StoredDocument:
             return self.name
 
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS documents(
-    name TEXT PRIMARY KEY, status TEXT NOT NULL, text TEXT NOT NULL,
-    external_processing_approved INTEGER NOT NULL DEFAULT 0,
-    source_sha256 TEXT NOT NULL DEFAULT '', source_filename TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS versions(
-    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, status TEXT NOT NULL,
-    text TEXT NOT NULL, external_processing_approved INTEGER NOT NULL,
-    at TEXT NOT NULL, by TEXT NOT NULL, note TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS versions_name ON versions(name, id);
-CREATE TABLE IF NOT EXISTS pdfs(
-    sha256 TEXT PRIMARY KEY, filename TEXT NOT NULL, size INTEGER NOT NULL, data BLOB NOT NULL,
-    uploaded_at TEXT NOT NULL, uploaded_by TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS support(
-    name TEXT PRIMARY KEY, text TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS audit(
-    id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor TEXT NOT NULL,
-    action TEXT NOT NULL, target TEXT NOT NULL, detail TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-"""
+# ---- database layer ------------------------------------------------------------------------------
+# The store's logic (below) is written once, in plain SQL that SQLite and PostgreSQL both accept:
+# `?` placeholders, ON CONFLICT upserts, integer 0/1 flags and ISO-8601 text timestamps. Only the
+# few things that differ live in the two small classes here: connecting, DDL, transactions.
+
+
+def _schema(auto_id: str, blob: str) -> tuple[str, ...]:
+    return (
+        "CREATE TABLE IF NOT EXISTS documents("
+        "name TEXT PRIMARY KEY, "
+        "status TEXT NOT NULL CHECK (status IN ('draft', 'current', 'archived')), "
+        "text TEXT NOT NULL, external_processing_approved INTEGER NOT NULL DEFAULT 0, "
+        "source_sha256 TEXT NOT NULL DEFAULT '', source_filename TEXT NOT NULL DEFAULT '', "
+        "created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL)",
+        f"CREATE TABLE IF NOT EXISTS versions(id {auto_id}, name TEXT NOT NULL, "
+        "status TEXT NOT NULL, text TEXT NOT NULL, external_processing_approved INTEGER NOT NULL, "
+        "at TEXT NOT NULL, by TEXT NOT NULL, note TEXT NOT NULL)",
+        "CREATE INDEX IF NOT EXISTS versions_name ON versions(name, id)",
+        f"CREATE TABLE IF NOT EXISTS pdfs(sha256 TEXT PRIMARY KEY, filename TEXT NOT NULL, "
+        f"size INTEGER NOT NULL, data {blob} NOT NULL, uploaded_at TEXT NOT NULL, "
+        "uploaded_by TEXT NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS support(name TEXT PRIMARY KEY, text TEXT NOT NULL, "
+        "updated_at TEXT NOT NULL, updated_by TEXT NOT NULL)",
+        f"CREATE TABLE IF NOT EXISTS audit(id {auto_id}, at TEXT NOT NULL, actor TEXT NOT NULL, "
+        "action TEXT NOT NULL, target TEXT NOT NULL, detail TEXT NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value BIGINT NOT NULL)",
+        "INSERT INTO meta(key, value) VALUES('revision', 0) ON CONFLICT(key) DO NOTHING",
+    )
+
+
+class _SqliteDb:
+    """One SQLite file. Statements autocommit; `transaction()` is one atomic write."""
+
+    def __init__(self, path: Path, readonly: bool):
+        if readonly:
+            self._conn = sqlite3.connect(
+                path.resolve().as_uri() + "?mode=ro",
+                uri=True,
+                isolation_level=None,
+                check_same_thread=False,
+                timeout=5,
+            )
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self._conn = sqlite3.connect(
+                path, isolation_level=None, check_same_thread=False, timeout=10
+            )
+
+    def init_schema(self) -> None:
+        for statement in _schema("INTEGER PRIMARY KEY AUTOINCREMENT", "BLOB"):
+            self._conn.execute(statement)
+
+    def execute(self, sql: str, args: tuple = ()) -> list[dict]:
+        cursor = self._conn.execute(sql, args)
+        if cursor.description is None:
+            return []
+        names = [column[0] for column in cursor.description]
+        return [dict(zip(names, row)) for row in cursor.fetchall()]
+
+    @contextlib.contextmanager
+    def transaction(self):
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            yield
+        except BaseException:
+            self._conn.execute("ROLLBACK")
+            raise
+        self._conn.execute("COMMIT")
+
+    def close(self) -> None:
+        self._conn.close()
+
+
+class _PostgresDb:
+    """PostgreSQL through psycopg 3. One connection, reopened after it drops. Statements
+    autocommit; `transaction()` is one atomic write that also takes an advisory lock, so two admin
+    processes cannot interleave their check-then-write steps."""
+
+    ADVISORY_LOCK = 727_001
+
+    def __init__(self, url: str, readonly: bool):
+        try:
+            import psycopg
+            from psycopg.conninfo import conninfo_to_dict
+            from psycopg.rows import dict_row
+        except ImportError as error:
+            raise StoreError(
+                "PostgreSQL support needs the psycopg package: pip install 'psycopg[binary]'"
+            ) from error
+        self._psycopg, self._dict_row = psycopg, dict_row
+        params = conninfo_to_dict(url)
+        # Fail fast instead of hanging a question; the bot's account can also never write.
+        timeout_ms = 3000 if readonly else 30000
+        options = f"-c statement_timeout={timeout_ms}"
+        if readonly:
+            options += " -c default_transaction_read_only=on"
+        params["options"] = f"{params.get('options', '')} {options}".strip()
+        params.setdefault("connect_timeout", "5")
+        params.setdefault("application_name", "gab-faq-bot" if readonly else "gab-faq-admin")
+        self._params = params
+        self._conn = None
+        self._in_transaction = False
+        self._connection()  # an unreachable database is an error now, not at the first request
+
+    def _connection(self):
+        conn = self._conn
+        if conn is None or conn.closed or conn.broken:
+            self._conn = conn = self._psycopg.connect(
+                **self._params, autocommit=True, row_factory=self._dict_row
+            )
+        return conn
+
+    def _drop(self) -> None:
+        conn, self._conn = self._conn, None
+        if conn is not None:
+            with contextlib.suppress(Exception):
+                conn.close()
+
+    def init_schema(self) -> None:
+        with self.transaction():
+            for statement in _schema("BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY", "BYTEA"):
+                self.execute(statement)
+
+    def execute(self, sql: str, args: tuple = ()) -> list[dict]:
+        sql = sql.replace("?", "%s")
+        for attempt in (1, 2):
+            try:
+                with self._connection().cursor() as cursor:
+                    cursor.execute(sql, args)
+                    return cursor.fetchall() if cursor.description else []
+            except self._psycopg.OperationalError:
+                self._drop()
+                # Reads outside a transaction are safe to repeat once on a fresh connection.
+                if attempt == 2 or self._in_transaction:
+                    raise
+        return []  # pragma: no cover
+
+    @contextlib.contextmanager
+    def transaction(self):
+        conn = self._connection()
+        self._in_transaction = True
+        try:
+            with conn.transaction():
+                conn.execute("SELECT pg_advisory_xact_lock(%s)", (self.ADVISORY_LOCK,))
+                yield
+        except self._psycopg.OperationalError:
+            self._drop()
+            raise
+        finally:
+            self._in_transaction = False
+
+    def close(self) -> None:
+        self._drop()
+
 
 _DOC_COLUMNS = (
     "name, status, text, external_processing_approved, source_sha256, source_filename, "
@@ -196,40 +332,31 @@ _DOC_COLUMNS = (
 )
 
 
-class SqliteKnowledgeStore:
-    """SQLite implementation. A production database (Postgres, MongoDB) needs only this same set
-    of methods. `readonly=True` is what the bot uses: it can never change a document."""
+class KnowledgeStore:
+    """The store, on top of a database layer. `readonly=True` is what the bot uses: it can never
+    change a document (and, on PostgreSQL, its session is read-only too)."""
 
-    def __init__(self, path: Path, readonly: bool = False):
-        self.path = Path(path)
+    def __init__(self, db, readonly: bool = False):
+        self._db = db
         self.readonly = readonly
         self._lock = threading.RLock()
-        if readonly:
-            self._db = sqlite3.connect(
-                self.path.resolve().as_uri() + "?mode=ro",
-                uri=True,
-                check_same_thread=False,
-                timeout=5,
-            )
-        else:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self._db = sqlite3.connect(self.path, check_same_thread=False, timeout=10)
-            self._db.executescript(_SCHEMA)
-            self._db.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('revision', '0')")
-            self._db.commit()
-        self._db.row_factory = sqlite3.Row
+        if not readonly:
+            db.init_schema()
 
     def close(self) -> None:
         with self._lock:
             self._db.close()
 
+    def _tx(self):
+        return self._db.transaction()
+
     # ---- reading -------------------------------------------------------------------------------
     def revision(self) -> int:
         with self._lock:
-            row = self._db.execute("SELECT value FROM meta WHERE key='revision'").fetchone()
-            return int(row["value"]) if row else 0
+            rows = self._db.execute("SELECT value FROM meta WHERE key='revision'")
+            return int(rows[0]["value"]) if rows else 0
 
-    def _doc(self, row) -> StoredDocument:
+    def _doc(self, row: dict) -> StoredDocument:
         return StoredDocument(
             row["name"],
             row["status"],
@@ -252,44 +379,39 @@ class SqliteKnowledgeStore:
 
     def get_document(self, name: str) -> StoredDocument | None:
         with self._lock:
-            row = self._db.execute(
-                f"SELECT {_DOC_COLUMNS} FROM documents WHERE name=?", (name,)
-            ).fetchone()
-            return self._doc(row) if row else None
+            rows = self._db.execute(f"SELECT {_DOC_COLUMNS} FROM documents WHERE name=?", (name,))
+            return self._doc(rows[0]) if rows else None
 
     def history(self, name: str, limit: int = 30) -> list[dict]:
         with self._lock:
-            rows = self._db.execute(
+            return self._db.execute(
                 "SELECT id, status, external_processing_approved, at, by, note, length(text) "
                 "AS size FROM versions WHERE name=? ORDER BY id DESC LIMIT ?",
                 (name, limit),
-            ).fetchall()
-            return [dict(r) for r in rows]
+            )
 
     def audit_log(self, limit: int = 100, target: str | None = None) -> list[dict]:
         with self._lock:
             sql, args = "SELECT at, actor, action, target, detail FROM audit", ()
             if target:
                 sql, args = sql + " WHERE target=?", (target,)
-            rows = self._db.execute(sql + " ORDER BY id DESC LIMIT ?", args + (limit,))
-            return [dict(r) for r in rows.fetchall()]
+            return self._db.execute(sql + " ORDER BY id DESC LIMIT ?", args + (limit,))
 
     def counts(self) -> dict[str, int]:
         with self._lock:
-            found = dict(self._db.execute("SELECT status, COUNT(*) FROM documents GROUP BY status"))
+            rows = self._db.execute("SELECT status, COUNT(*) AS n FROM documents GROUP BY status")
+        found = {row["status"]: int(row["n"]) for row in rows}
         return {status: found.get(status, 0) for status in STATUSES}
 
     def get_support(self, name: str) -> str | None:
         with self._lock:
-            row = self._db.execute("SELECT text FROM support WHERE name=?", (name,)).fetchone()
-            return row["text"] if row else None
+            rows = self._db.execute("SELECT text FROM support WHERE name=?", (name,))
+            return rows[0]["text"] if rows else None
 
     def get_pdf(self, sha256: str) -> tuple[str, bytes] | None:
         with self._lock:
-            row = self._db.execute(
-                "SELECT filename, data FROM pdfs WHERE sha256=?", (sha256,)
-            ).fetchone()
-            return (row["filename"], bytes(row["data"])) if row else None
+            rows = self._db.execute("SELECT filename, data FROM pdfs WHERE sha256=?", (sha256,))
+            return (rows[0]["filename"], bytes(rows[0]["data"])) if rows else None
 
     def entry_ids_of_current(self, except_name: str | None = None) -> dict[str, set[str]]:
         """Entry IDs of every published document (for the cross-document uniqueness check)."""
@@ -327,24 +449,34 @@ class SqliteKnowledgeStore:
         )
 
     def _bump(self) -> None:
-        self._db.execute("UPDATE meta SET value = CAST(value AS INTEGER) + 1 WHERE key='revision'")
+        self._db.execute("UPDATE meta SET value = value + 1 WHERE key='revision'")
 
     def _snapshot(self, name: str, actor: str, note: str) -> None:
+        doc = self.get_document(name)
+        if doc is None:
+            return
         self._db.execute(
-            "INSERT INTO versions(name, status, text, external_processing_approved, at, by, note) "
-            "SELECT name, status, text, external_processing_approved, ?, ?, ? FROM documents "
-            "WHERE name=?",
-            (now_iso(), actor, note, name),
+            "INSERT INTO versions(name, status, text, external_processing_approved, at, by, "
+            "note) VALUES(?,?,?,?,?,?,?)",
+            (
+                name,
+                doc.status,
+                doc.text,
+                int(doc.external_processing_approved),
+                now_iso(),
+                actor,
+                note,
+            ),
         )
 
     def put_pdf(self, data: bytes, filename: str, actor: str) -> str:
         self._writable()
         check_pdf(data)
         digest = hashlib.sha256(data).hexdigest()
-        with self._lock, self._db:
+        with self._lock, self._tx():
             self._db.execute(
-                "INSERT OR IGNORE INTO pdfs(sha256, filename, size, data, uploaded_at, "
-                "uploaded_by) VALUES(?,?,?,?,?,?)",
+                "INSERT INTO pdfs(sha256, filename, size, data, uploaded_at, uploaded_by) "
+                "VALUES(?,?,?,?,?,?) ON CONFLICT(sha256) DO NOTHING",
                 (digest, Path(filename).name[:200], len(data), data, now_iso(), actor),
             )
             self._audit(actor, "upload-pdf", digest[:12], Path(filename).name)
@@ -358,6 +490,7 @@ class SqliteKnowledgeStore:
         source_sha256: str = "",
         source_filename: str = "",
         status: str = "draft",
+        external_processing_approved: bool = False,
     ) -> StoredDocument:
         self._writable()
         if not NAME_RE.match(name):
@@ -366,13 +499,23 @@ class SqliteKnowledgeStore:
             raise StoreError("A new document starts as a draft or is imported as current.")
         if len(text.encode("utf-8")) > MAX_TEXT_BYTES:
             raise StoreError("The document is larger than 1 MB.")
-        with self._lock, self._db:
+        with self._lock, self._tx():
             if self.get_document(name):
                 raise StoreError(f"{name} already exists.")
             stamp = now_iso()
             self._db.execute(
                 f"INSERT INTO documents({_DOC_COLUMNS}, created_at) VALUES(?,?,?,?,?,?,?,?,?)",
-                (name, status, text, 0, source_sha256, source_filename[:200], stamp, actor, stamp),
+                (
+                    name,
+                    status,
+                    text,
+                    int(bool(external_processing_approved)),
+                    source_sha256,
+                    source_filename[:200],
+                    stamp,
+                    actor,
+                    stamp,
+                ),
             )
             self._snapshot(name, actor, "created")
             self._audit(actor, "create", name, source_filename or status)
@@ -392,7 +535,7 @@ class SqliteKnowledgeStore:
         """Save new text. A draft is saved as is (work in progress); a published document is
         validated first, so the bot can never be handed broken text."""
         self._writable()
-        with self._lock, self._db:
+        with self._lock, self._tx():
             doc = self._need(name)
             if len(text.encode("utf-8")) > MAX_TEXT_BYTES:
                 raise StoreError("The document is larger than 1 MB.")
@@ -416,7 +559,7 @@ class SqliteKnowledgeStore:
         """Make a draft or archived document live. The Qwen approval is an explicit argument,
         never defaulted on."""
         self._writable()
-        with self._lock, self._db:
+        with self._lock, self._tx():
             doc = self._need(name)
             check = self.validate(name, doc.text)
             if not check.ok:
@@ -438,7 +581,7 @@ class SqliteKnowledgeStore:
 
     def set_external_approval(self, name: str, approved: bool, actor: str) -> StoredDocument:
         self._writable()
-        with self._lock, self._db:
+        with self._lock, self._tx():
             doc = self._need(name)
             self._db.execute(
                 "UPDATE documents SET external_processing_approved=?, updated_at=?, "
@@ -454,7 +597,7 @@ class SqliteKnowledgeStore:
     def archive(self, name: str, actor: str) -> StoredDocument:
         """Take a document out of the bot's answers. It stays here and can be restored."""
         self._writable()
-        with self._lock, self._db:
+        with self._lock, self._tx():
             doc = self._need(name)
             if doc.status != "current":
                 raise StoreError(f"{name} is not published.")
@@ -476,7 +619,7 @@ class SqliteKnowledgeStore:
         """Permanently remove a draft or archived document (a published one must be archived
         first). Its saved versions and the audit trail stay."""
         self._writable()
-        with self._lock, self._db:
+        with self._lock, self._tx():
             doc = self._need(name)
             if doc.status == "current":
                 raise StoreError("Archive a published document before deleting it.")
@@ -487,12 +630,12 @@ class SqliteKnowledgeStore:
     def rollback(self, name: str, version_id: int, actor: str) -> StoredDocument:
         self._writable()
         with self._lock:
-            row = self._db.execute(
+            rows = self._db.execute(
                 "SELECT text FROM versions WHERE id=? AND name=?", (version_id, name)
-            ).fetchone()
-        if not row:
+            )
+        if not rows:
             raise StoreError("That version does not exist.")
-        return self.save_text(name, row["text"], actor, note=f"restored version {version_id}")
+        return self.save_text(name, rows[0]["text"], actor, note=f"restored version {version_id}")
 
     def set_support(self, name: str, text: str, actor: str) -> None:
         self._writable()
@@ -502,7 +645,7 @@ class SqliteKnowledgeStore:
             data = yaml.safe_load(text) or {}
             if not isinstance(data, dict):
                 raise StoreError("entry-policy.yaml must contain a mapping.")
-        with self._lock, self._db:
+        with self._lock, self._tx():
             self._db.execute(
                 "INSERT INTO support(name, text, updated_at, updated_by) VALUES(?,?,?,?) "
                 "ON CONFLICT(name) DO UPDATE SET text=excluded.text, "
@@ -539,22 +682,63 @@ class SqliteKnowledgeStore:
                 continue
             if not parsed.approved:
                 continue
-            self.create_draft(path.name, text, actor, source_filename=path.name, status="current")
-            if (approvals.get(path.name) or {}).get("external_processing_approved") is True:
-                self._db.execute(
-                    "UPDATE documents SET external_processing_approved=1 WHERE name=?",
-                    (path.name,),
+            self.create_draft(
+                path.name,
+                text,
+                actor,
+                source_filename=path.name,
+                status="current",
+                external_processing_approved=(approvals.get(path.name) or {}).get(
+                    "external_processing_approved"
                 )
-                self._db.commit()
+                is True,
+            )
             imported.append(path.name)
         for name in SUPPORT_FILES:
             file = directory / name
             if file.exists() and self.get_support(name) is None:
                 self.set_support(name, file.read_text(encoding="utf-8"), actor)
-        if imported:
-            with self._lock, self._db:
-                self._bump()
         return imported
+
+
+class SqliteKnowledgeStore(KnowledgeStore):
+    """A single SQLite file: fine for one machine, not shareable between two pods."""
+
+    def __init__(self, path: Path, readonly: bool = False):
+        self.path = Path(path)
+        super().__init__(_SqliteDb(self.path, readonly), readonly)
+
+
+class PostgresKnowledgeStore(KnowledgeStore):
+    """PostgreSQL, for the cluster: the admin UI and the bot share it over the network."""
+
+    def __init__(self, url: str, readonly: bool = False):
+        super().__init__(_PostgresDb(url, readonly), readonly)
+
+
+def is_postgres_url(location) -> bool:
+    return str(location).startswith(("postgres://", "postgresql://"))
+
+
+def open_store(location, readonly: bool = False) -> KnowledgeStore:
+    """A SQLite file path, or a postgresql:// URL."""
+    if is_postgres_url(location):
+        return PostgresKnowledgeStore(str(location), readonly)
+    return SqliteKnowledgeStore(Path(location), readonly)
+
+
+def redact_location(location) -> str:
+    """The database address that is safe to print or log: no password, no query string."""
+    text = str(location)
+    if not is_postgres_url(text):
+        return text
+    try:
+        parts = urlsplit(text)
+        user = f"{parts.username}@" if parts.username else ""
+        port = f":{parts.port}" if parts.port else ""
+        return f"{parts.scheme}://{user}{parts.hostname or ''}{port}{parts.path}"
+    except ValueError:
+        return f"{text.split('://', 1)[0]}://(unreadable address)"
 
 
 class StoreSource:
@@ -676,18 +860,36 @@ def _write_if_different(path: Path, text: str) -> bool:
 
 
 class ReconnectingStore:
-    """Opens the store on first use and again after a failure, so a database that is missing or
-    down when the bot starts is not a startup error (StoreSource.sync handles the exception)."""
+    """Opens the store on first use, and again after any database failure, so a database that is
+    missing or down when the bot starts is not a startup error and a dropped connection heals
+    itself (StoreSource.sync handles the exception and keeps the last good files)."""
 
     def __init__(self, factory):
         self._factory = factory
         self._store = None
 
+    def _forget(self) -> None:
+        store, self._store = self._store, None
+        if store is not None:
+            with contextlib.suppress(Exception):
+                store.close()
+
     def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
         if self._store is None:
             self._store = self._factory()
-        try:
-            return getattr(self._store, name)
-        except sqlite3.Error:
-            self._store = None
-            raise
+        attribute = getattr(self._store, name)
+        if not callable(attribute):
+            return attribute
+
+        def call(*args, **kwargs):
+            try:
+                return attribute(*args, **kwargs)
+            except StoreError:
+                raise
+            except Exception:
+                self._forget()
+                raise
+
+        return call

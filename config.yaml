@@ -399,6 +399,17 @@ gab_faq:
     # for a person; several separated by spaces. Empty = no one is tagged.
     reminder_mention: ""
 
+  # The PM's upload channel. In this PRIVATE staff channel Gigi turns a guideline PDF into a draft
+  # (not live), shows the checks, and publishes only when the PM presses a button; "list", "get",
+  # "archive", "restore", "delete" and "qwen" manage the documents. Needs the secret
+  # GAB_KNOWLEDGE_ADMIN_DB (the database account that may write) and, for answers to change,
+  # GAB_KNOWLEDGE_DB (the bot's read-only account). Gigi refuses to work in a channel that
+  # @everyone can read. Off until enabled: true.
+  knowledge_updates:
+    enabled: false
+    channel: gigi-updates      # channel name or ID
+    allowed_roles: []          # optional role names/IDs; empty = anyone who can post in the channel
+
   # Who handles what, and the two request forms (/throttle-request, /task-issue).
   # Routing is decided by code from this table (gab_faq/routing.py), never by the AI: when the FAQ
   # can't fully answer, the bot names the contact for that kind of question and tags them on the

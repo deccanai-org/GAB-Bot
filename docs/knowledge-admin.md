@@ -1,88 +1,137 @@
-# Knowledge admin UI
+# Gigi's updates channel (managing the FAQ from Discord)
 
-A small web app for the GAB PM to upload a guideline **PDF**, review the FAQ entries drafted from
-it, and publish, archive or delete documents, with no image rebuild. The bot reads the published
-documents from a database.
+The GAB PM manages Gigi's FAQ documents from a **private staff-only Discord channel**
+(`#gigi-updates`): drop a guideline PDF, review the drafted entries, press Publish. No separate
+website, no image rebuild. The documents live in a database (PostgreSQL in the cluster); the bot
+answers from the published ones.
 
-## How it fits together
+## What the PM does
 
+1. **Drop a PDF** in the channel (optionally with a title as the message text).
+2. Gigi replies with a **draft**: an embed (entries found, the checks, warnings) and the draft as
+   an attached `<name>.md`. The text is read in a separate, restricted process. **Nothing is live.**
+3. To change the draft, edit the `.md` and **post it back** in the channel under the same name.
+   Gigi replaces the draft and shows the checks again.
+4. Press **Publish** (Gigi won't send it to Qwen) or **Publish & allow Qwen**, or **Discard draft**.
+   Gigi answers from a published document on its next question.
+
+Other commands (exact forms, so ordinary chat in the channel is ignored):
+
+| Say | What happens |
+| --- | --- |
+| `list` | every document: live / draft / archived, entries, whether Qwen may use it |
+| `get <name>` | the document as a `.md` file (edit it and post it back to change a live document) |
+| `archive <name>` | takes a live document offline; it is kept and can come back |
+| `restore <name>` | brings an archived document back, keeping its Qwen setting |
+| `delete <name>` | asks for confirmation, then deletes a draft or archived document for good (saved versions and the activity log stay) |
+| `qwen <name> on` / `off` | lets Qwen use, or stop using, a document |
+| `import builtin` | **once, before the first publish:** loads the FAQ documents built into the image |
+| `help` | this list |
+
+Gigi will not archive the last live document, and will not publish into an empty database (see the
+first-time step below).
+
+### The Qwen buttons
+
+A question whose matching entries come from a document that Qwen may not use is handed to staff
+instead of answered (the gate in `qwen.py`). **Publish** therefore keeps a document away from
+Qwen; **Publish & allow Qwen** is a separate, deliberate button. Nothing turns Qwen on for you.
+
+## Setting it up
+
+1. **Create the channel** (for example `#gigi-updates`) and make it private: deny **View Channel**
+   to `@everyone`; allow the staff roles and Gigi **View Channel, Send Messages, Attach Files,
+   Embed Links, Read Message History**. Gigi **refuses to work** in a channel that `@everyone`
+   can read.
+2. **Developer Portal:** the **Message Content intent** must be on (the bot already needs it).
+   Without it Discord hides attachments and message text from the bot and the channel does nothing.
+3. **Database:** the PostgreSQL accounts below. Two secrets in the bot's cluster secret entry
+   (merge them in next to `DISCORD_TOKEN`; restart the pod after changing):
+   * `GAB_KNOWLEDGE_DB`: the **read-only** account (what Gigi answers from);
+   * `GAB_KNOWLEDGE_ADMIN_DB`: the account that **writes** (used only by this channel).
+4. **config.yaml:** under `gab_faq`, set `knowledge_updates.enabled: true`, `channel: gigi-updates`
+   (a name or an ID) and optionally `allowed_roles` (role names or IDs; empty = anyone who can
+   post in the private channel).
+5. **First time only:** say `import builtin`. The database is the whole truth once it holds a live
+   document, so without this the first publish would replace the FAQ built into the image with just
+   that one document. Gigi refuses to publish into an empty database and tells you to import.
+
+The channel runs inside the FAQ answering, so `gab_faq.enabled` must be on (with the Qwen key).
+If `GAB_KNOWLEDGE_ADMIN_DB` is missing the channel stays off and the log says why.
+
+## What protects it
+
+* Only the configured channel is used, never a thread or DM, and only if `@everyone` cannot read it.
+  Anything said there belongs to this feature: it is never treated as a question for the FAQ.
+* `allowed_roles` (if set) is checked on every message and every button press.
+* A draft is never served. Publishing is a button or command; Qwen access is its own button.
+* Every change is recorded with who made it (Discord name and ID) in the activity log.
+* PDF text is read by a **separate process** that receives none of the bot's secrets (no Discord
+  token, Qwen key or database URL in its environment), with a 90 s time limit and, on Linux, a
+  1 GB memory and a CPU ceiling. A hostile PDF can neither read the bot's secrets nor hang it.
+  `pypdf` is kept current (CI runs `pip_audit --strict`).
+* **Trade-off to know about:** the bot now holds a database account that can write. It is used
+  only by this channel; answering keeps the read-only one.
+* Text checks before anything can be published: safe file name, valid header, no password/token/key
+  in the text, at least one numbered entry, entry IDs unique inside the document **and across all
+  live documents**.
+
+## PostgreSQL setup
+
+Two accounts: the writer (`gab_admin`) and the bot's reader (`gab_bot`).
+
+```sql
+-- as a superuser / the RDS master user
+CREATE ROLE gab_admin LOGIN PASSWORD '<generated>';
+CREATE ROLE gab_bot   LOGIN PASSWORD '<generated>';
+CREATE DATABASE gab_knowledge OWNER gab_admin;
 ```
-PM browser --> admin UI (python -m gab_faq.admin) --> knowledge database <-- bot (read-only)
-                  PDF text -> draft entries                                   |
-                  review/edit -> Publish                                      v
-                                                          output/knowledge-live/*.md  (local copy)
-                                                                              |
-                                                          KnowledgeBase (unchanged parsing,
-                                                          approval policy, secret scan, index)
+
+1. Connect once as `gab_admin` (start the bot with the channel on, or run the web admin below). It
+   creates the tables (`documents`, `versions`, `pdfs`, `support`, `audit`, `meta`).
+2. Give the reader the least it needs (connected to `gab_knowledge`):
+
+```sql
+GRANT USAGE ON SCHEMA public TO gab_bot;
+GRANT SELECT ON documents, support, meta TO gab_bot;   -- NOT pdfs, versions or audit
 ```
 
-* The bot never writes to the database. It copies the **published** documents into
-  `output/knowledge-live/` (at most every 5 s, when a question arrives) and the existing
-  `KnowledgeBase` reads that folder exactly as it read `knowledge/current/`.
-* Drafts and archived documents are never served.
-* If the database is down, or a published document fails validation, the bot keeps the last good
-  files. If it has never reached the database it serves the documents built into the image.
-* The feature is **off** unless `gab_faq.knowledge_store` (config.yaml) or `GAB_KNOWLEDGE_DB` is set,
-  so the image behaves as before.
+`tests/test_knowledge_store_postgres.py` runs the bot against exactly these grants. URL form:
+`postgresql://gab_bot:<password>@<host>:5432/gab_knowledge?sslmode=require` (for RDS use
+`sslmode=verify-full&sslrootcert=<RDS CA bundle>`). The URLs hold passwords: they never go in
+`config.yaml`, a command line or a log (`gigi check` shows them without the password).
 
-## Running it (local)
+* Writers are serialised with a PostgreSQL advisory lock inside each transaction. Without it, two
+  publishes of drafts that reuse an entry ID at the same moment both went live in 25 of 25 trial
+  rounds; with it, in 0 of 25.
+* The bot's reading session is also set read-only with a 3 s statement timeout through the
+  connection `options` parameter. **A connection pooler that rejects `options` (PgBouncer by
+  default; set `ignore_startup_parameters = options`) will refuse the connection.** The SELECT-only
+  grants are the real protection; the session setting is a second layer.
+* If the database is down, or a document fails validation, Gigi keeps answering from the last good
+  files (or, if it never reached the database, from the documents built into the image). Reads
+  from the bot time out after 3 s and are retried at most every 30 s.
 
-```powershell
-pip install -r requirements-admin.txt          # pypdf, admin UI only; the bot image does not need it
-$env:GAB_ADMIN_PASSWORD = "a long password"    # 12+ characters, read from the environment only
-python -m gab_faq.admin --import-builtin       # http://127.0.0.1:8090, user "pm" (GAB_ADMIN_USER)
-```
+## Optional: the same documents from a web page
 
-`--import-builtin` loads the documents in `knowledge/current/` into an empty database (with their
-Qwen approvals), so the bot's answers do not change. The default database is
-`output/knowledge.sqlite3` (`--store` or `GAB_KNOWLEDGE_DB` to change it).
+`python -m gab_faq.admin` runs a small local web page over the same database (same checks, same
+Draft/Publish/Archive/Delete, an Upload tab). It listens on 127.0.0.1 only and is not part of the
+bot. Set `GAB_ADMIN_PASSWORD` (12+ characters) and `GAB_KNOWLEDGE_DB` (the writer's URL; `--store`
+refuses a URL that contains a password) in the environment. Nothing needs it.
 
-To point the bot at it: `GAB_KNOWLEDGE_DB=<same file> gigi check`.
+## Not verified yet
 
-## PM workflow
-
-1. **Upload a PDF.** The text is extracted on the server (pypdf: no network, no AI) and drafted into
-   numbered entries (`A1. Question` + answer). Questions, `Question? A: answer` lines, headings
-   and bullet lists become entries. Page numbers and repeated headers/footers are removed.
-2. **Review.** The draft is only a starting point. Fix the question lines, merge or split entries,
-   set `audience:` (annotator / qc / qm / all) and `phase:`. The page shows the checks that must
-   pass before publishing.
-3. **Publish.** Tick *Allow Qwen* only if the document may be sent to Qwen (see below).
-4. **Archive** takes a live document offline (restorable). **Delete** is permanent for the
-   document but only for drafts/archived ones; saved versions and the activity log are kept.
-   **History** restores any earlier version.
-
-### The Qwen tick box
-
-A question whose matching entries come from a document that is not allowed for Qwen is handed to
-staff instead of answered (the existing gate in `qwen.py`). The box defaults to **off** and is never
-ticked for you.
-
-## Checks before a document can be live
-
-File name safe (`[a-z0-9-]+.md`); header valid and not marked archived/draft; no password/token/API
-key in the text; at least one numbered entry; entry IDs unique inside the document **and across all
-live documents** (IDs are global: entry-policy, videos and follow-ups refer to them). Text outside a
-numbered entry is a warning because the bot ignores it. The last live document cannot be archived.
-
-## Security
-
-* HTTP Basic login from `GAB_ADMIN_PASSWORD` (constant-time compare), 5 wrong passwords per minute
-  per address are throttled. It listens on 127.0.0.1 only; any other `--host` needs
-  `--behind-tls-proxy` (Basic auth must never cross a network unencrypted).
-* POSTs must come from the same origin (CSRF); all text is HTML-escaped; strict CSP; uploads are
-  size-limited (25 MB), must start with `%PDF-`, and the original is served only as a sandboxed
-  download.
-* Every change is in the activity log with the user name.
-
-## Not done yet
-
-* **Production database.** `SqliteKnowledgeStore` is one file. The UI and the bot must share it,
-  which works on one machine, but the cluster's volume cannot be shared between two pods. For
-  production, implement the same methods for Postgres or MongoDB (the bot only needs `revision`,
-  `list_documents`, `get_support`; the UI needs the rest) and set `GAB_KNOWLEDGE_DB` accordingly.
-* **Hosting, TLS and single sign-on** for the UI, and database credentials in the cluster secret.
-* **Entry provenance.** `entry-policy.yaml` entries (`source_location`, `requires`, `claims`) are
-  imported for the built-in documents but are not editable in the UI; new documents get the PDF
-  name and the line number as their source.
-* **Draft quality.** PDF to FAQ is heuristic. Scanned PDFs (no text) are refused; there is no OCR.
+* **Against real Discord.** The tests fake Discord (messages, attachments, buttons) around the real
+  database, embeds and button views. GIGI was in no server at the last check, so the first real run
+  should be in a test channel: attachments, embeds, the buttons and the typing indicator have not
+  been seen working against Discord itself.
+* **PostgreSQL on RDS** (TLS to RDS, IAM authentication, RDS Proxy, PgBouncer). Tested on
+  PostgreSQL 16 in Docker.
+* **The production image with the new libraries** was not built here (this laptop's network blocks
+  it). The Linux / Python 3.11 wheels were checked against the lock with
+  `pip install --dry-run --require-hashes`, and the PDF reader was run in a Linux Python 3.11
+  container, including its memory ceiling.
+* **Draft quality.** PDF to FAQ is heuristic: expect to edit. Scanned PDFs (no text) are refused;
+  there is no OCR.
+* `entry-policy.yaml` entry details (`source_location`, `requires`, `claims`) are imported for the
+  built-in documents but cannot be edited from the channel.

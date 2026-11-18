@@ -263,6 +263,31 @@ def _support(section: dict | None) -> SupportSettings:
 
 
 @dataclass(frozen=True)
+class KnowledgeUpdatesSettings:
+    """gab_faq.knowledge_updates in config.yaml: the private staff channel where the PM drops
+    guideline PDFs and manages Gigi's FAQ documents (see gab_faq/knowledge_updates.py)."""
+
+    enabled: bool = False
+    channel: str = "gigi-updates"  # channel name or ID
+    # Optional: role names or IDs allowed to upload and publish. Empty = everyone who can post in
+    # the channel (which must be private either way).
+    allowed_roles: tuple[str, ...] = ()
+
+
+def _knowledge_updates(section: dict | None) -> KnowledgeUpdatesSettings:
+    section = section or {}
+    d = KnowledgeUpdatesSettings()
+    roles = section.get("allowed_roles") or []
+    if not isinstance(roles, list) or not all(isinstance(r, (str, int)) for r in roles):
+        raise ValueError("gab_faq.knowledge_updates.allowed_roles must be a list of role names")
+    return KnowledgeUpdatesSettings(
+        enabled=section.get("enabled", d.enabled) is True,
+        channel=str(section.get("channel") or d.channel).strip().lstrip("#"),
+        allowed_roles=tuple(str(r).strip() for r in roles if str(r).strip()),
+    )
+
+
+@dataclass(frozen=True)
 class Settings:
     runtime: RuntimeSettings = field(default_factory=RuntimeSettings)
     enabled: bool = False
@@ -280,6 +305,7 @@ class Settings:
     followup: FollowupSettings = field(default_factory=FollowupSettings)
     # Contacts, /throttle-request and /task-issue (routing.py, support.py).
     support: SupportSettings = field(default_factory=SupportSettings)
+    knowledge_updates: KnowledgeUpdatesSettings = field(default_factory=KnowledgeUpdatesSettings)
     environment: str = "staging"  # staging (replies start with [TEST BOT]) | production
     max_history_messages: int = 4
     model_limits: ModelLimits = field(default_factory=ModelLimits)
@@ -287,7 +313,8 @@ class Settings:
     # Optional knowledge database edited through the admin UI (gab_faq.admin). When set, the bot
     # serves the published documents from it; knowledge_dir stays the built-in fallback and
     # knowledge_live_dir is where the published files are written for the bot to read.
-    knowledge_store: Path | None = None
+    # A SQLite file path or a postgresql:// URL (the URL holds the password: hidden from repr).
+    knowledge_store: Path | str | None = field(default=None, repr=False)
     knowledge_live_dir: Path = Path("output") / "knowledge-live"
     # Where questions are logged. Same folder the rest of the bot saves its files in.
     log_dir: Path = Path("output")
@@ -307,6 +334,13 @@ class Settings:
             raise ValueError("gab_faq.enable_thinking must be true or false")
         if not 0 <= self.max_history_messages <= 50:
             raise ValueError("max_history_messages must be between 0 and 50")
+
+
+def _store_location(value) -> Path | str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    return text if text.startswith(("postgres://", "postgresql://")) else Path(text)
 
 
 def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
@@ -349,11 +383,12 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         ),
         followup=_followup(faq.get("followup")),
         support=_support(faq.get("support")),
+        knowledge_updates=_knowledge_updates(faq.get("knowledge_updates")),
         environment=environment,
         max_history_messages=int(faq.get("max_history_messages", 4)),
         model_limits=ModelLimits.parse(faq.get("model_limits")),
         knowledge_dir=knowledge_dir,
-        knowledge_store=Path(str(store_path)) if store_path else None,
+        knowledge_store=_store_location(store_path),
         knowledge_live_dir=Path(
             os.environ.get("GAB_KNOWLEDGE_LIVE_DIR")
             or faq.get("knowledge_live_dir")

@@ -9,9 +9,14 @@ reword titles and merge or split entries in the editor.
 from __future__ import annotations
 
 import io
+import json
+import os
 import re
+import subprocess
+import sys
 from collections import Counter
 from datetime import date
+from pathlib import Path
 
 import yaml
 
@@ -20,6 +25,17 @@ MAX_PAGES = 400
 
 class PdfImportError(ValueError):
     """The PDF cannot be turned into a draft; the message is safe to show the PM."""
+
+
+def page_text(page) -> str:
+    """One page's text. Layout mode rebuilds lines from the glyph positions; the default mode can
+    return one word per line for PDFs that position every word separately (seen with pypdf 6.21),
+    which loses the line structure the drafting relies on. It is only the fallback."""
+    try:
+        text = page.extract_text(extraction_mode="layout") or ""
+    except Exception:  # an odd page must not lose the whole document
+        text = ""
+    return text if text.strip() else (page.extract_text() or "")
 
 
 def extract_pages(data: bytes) -> list[str]:
@@ -34,7 +50,7 @@ def extract_pages(data: bytes) -> list[str]:
             raise PdfImportError("The PDF is password protected. Remove the password and retry.")
         if len(reader.pages) > MAX_PAGES:
             raise PdfImportError(f"The PDF has more than {MAX_PAGES} pages.")
-        pages = [(page.extract_text() or "") for page in reader.pages]
+        pages = [page_text(page) for page in reader.pages]
     except PdfImportError:
         raise
     except (PyPdfError, ValueError, KeyError, OSError, RecursionError) as error:
@@ -77,7 +93,13 @@ def clean_lines(pages: list[str]) -> list[str]:
     repeated: set[str] = set()
     if len(pages) >= 3:
         counts = Counter(line for lines in per_page for line in set(lines) if line)
-        repeated = {line for line, n in counts.items() if n >= max(3, 0.6 * len(pages))}
+        # A running header/footer is a real line. Short lines ("the", "Note") repeat on most pages
+        # without being one, and must never be dropped from the text.
+        repeated = {
+            line
+            for line, n in counts.items()
+            if n >= max(3, 0.6 * len(pages)) and len(line) >= 12 and " " in line
+        }
     out: list[str] = []
     for lines in per_page:
         for line in lines:
@@ -132,6 +154,8 @@ def choose_prefix(title: str, taken: set[str]) -> str:
 def add_body(body: list[str], line: str) -> None:
     """Append a line, joining it to the previous one when the PDF wrapped a sentence."""
     line = body_line(line)
+    if not body:
+        line = re.sub(r"^A\s*:\s*", "", line)  # "Q? / A: answer": the entry is the answer
     if body and not body[-1].endswith(SENTENCE_END) and not STARTS_ITEM.match(line):
         body[-1] += " " + line
     else:
@@ -209,3 +233,41 @@ def draft_markdown(
         "the audience, and delete anything the bot should not say. -->\n\n"
         f"{body}"
     )
+
+
+# The only variables the reader process gets: enough to start Python, none of the bot's secrets.
+SAFE_ENVIRONMENT = ("PATH", "SYSTEMROOT", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP")
+MAX_WORKER_OUTPUT = 20_000_000
+
+
+def extract_pages_isolated(
+    data: bytes, timeout: float = 90, memory_mb: int = 1024, worker: Path | None = None
+) -> list[str]:
+    """extract_pages() in a separate, credential-free process (see pdf_worker.py), stopped after
+    `timeout` seconds. This is what the embedded admin tab uses; a hostile or huge PDF can then
+    neither hang the bot nor read its secrets."""
+    worker = worker or Path(__file__).with_name("pdf_worker.py")
+    environment = {key: os.environ[key] for key in SAFE_ENVIRONMENT if key in os.environ}
+    command = [sys.executable, "-I", str(worker), str(memory_mb), str(int(timeout))]
+    try:
+        done = subprocess.run(
+            command, input=data, capture_output=True, timeout=timeout, env=environment, check=False
+        )
+    except subprocess.TimeoutExpired as error:
+        raise PdfImportError("Reading the PDF took too long and was stopped.") from error
+    except OSError as error:
+        raise PdfImportError("The PDF reader could not be started.") from error
+    if done.returncode != 0 or len(done.stdout) > MAX_WORKER_OUTPUT:
+        raise PdfImportError("The PDF could not be read (the reader stopped unexpectedly).")
+    try:
+        result = json.loads(done.stdout)
+    except ValueError as error:
+        raise PdfImportError("The PDF could not be read (unreadable reader output).") from error
+    if not isinstance(result, dict):
+        raise PdfImportError("The PDF could not be read (unexpected reader output).")
+    if "error" in result:
+        raise PdfImportError(str(result["error"]))
+    pages = result.get("pages")
+    if not isinstance(pages, list) or not all(isinstance(page, str) for page in pages):
+        raise PdfImportError("The PDF could not be read (unexpected reader output).")
+    return pages

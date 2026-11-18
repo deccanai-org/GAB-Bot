@@ -1,7 +1,11 @@
 """The knowledge database: validation, lifecycle, and how the bot picks published documents up."""
 
+import os
 import sqlite3
+import threading
+import uuid
 from dataclasses import replace
+from urllib.parse import quote
 
 import pytest
 import yaml
@@ -9,16 +13,30 @@ import yaml
 from gab_faq.config import load_settings
 from gab_faq.knowledge import KnowledgeBase, build_knowledge
 from gab_faq.knowledge_store import (
+    PostgresKnowledgeStore,
     ReconnectingStore,
     SqliteKnowledgeStore,
     StoreError,
     StoreSource,
+    open_store,
+    redact_location,
     slugify,
     validate_document,
 )
 from gab_faq.search import split_entries
 
 from .conftest import ROOT
+
+# A superuser URL of a throwaway PostgreSQL, e.g.
+#   docker run -d -p 127.0.0.1:55432:5432 -e POSTGRES_PASSWORD=pw postgres:16-alpine
+#   GAB_TEST_POSTGRES_URL=postgresql://postgres:pw@127.0.0.1:55432/postgres
+# Each test gets its own schema, dropped afterwards. Without it the PostgreSQL runs are skipped.
+POSTGRES_ADMIN_URL = os.environ.get("GAB_TEST_POSTGRES_URL", "")
+
+
+def _in_schema(url: str, schema: str) -> str:
+    options = quote(f"-c search_path={schema}")
+    return f"{url}{'&' if '?' in url else '?'}options={options}"
 
 
 def doc(title="Sample FAQ", ids=("T1", "T2"), header_extra="", body_extra=""):
@@ -29,9 +47,35 @@ def doc(title="Sample FAQ", ids=("T1", "T2"), header_extra="", body_extra=""):
     )
 
 
+@pytest.fixture(params=["sqlite", "postgres"])
+def location(request, tmp_path):
+    """Where this test's database lives: every lifecycle test runs on both backends."""
+    if request.param == "sqlite":
+        yield tmp_path / "k.sqlite3"
+        return
+    if not POSTGRES_ADMIN_URL:
+        pytest.skip("set GAB_TEST_POSTGRES_URL to run the PostgreSQL tests")
+    psycopg = pytest.importorskip("psycopg")
+    schema = "gabtest_" + uuid.uuid4().hex[:12]
+    with psycopg.connect(POSTGRES_ADMIN_URL, autocommit=True) as admin:
+        admin.execute(f'CREATE SCHEMA "{schema}"')
+    try:
+        yield _in_schema(POSTGRES_ADMIN_URL, schema)
+    finally:
+        with psycopg.connect(POSTGRES_ADMIN_URL, autocommit=True) as admin:
+            admin.execute(f'DROP SCHEMA "{schema}" CASCADE')
+
+
 @pytest.fixture
-def store(tmp_path):
-    return SqliteKnowledgeStore(tmp_path / "k.sqlite3")
+def store(location):
+    opened = open_store(location)
+    yield opened
+    opened.close()
+
+
+@pytest.fixture
+def sqlite_store(tmp_path):
+    return SqliteKnowledgeStore(tmp_path / "s.sqlite3")
 
 
 def publish(store, name, text, qwen=False, actor="pm"):
@@ -174,14 +218,17 @@ def test_pdf_storage_checks_the_file_really_is_a_pdf_and_dedupes(store):
     assert store.get_pdf(digest)[1] == b"%PDF-1.4 fake"
 
 
-def test_the_bots_read_only_connection_cannot_change_anything(store, tmp_path):
+def test_the_bots_read_only_connection_cannot_change_anything(store, location):
     publish(store, "a.md", doc())
-    reader = SqliteKnowledgeStore(tmp_path / "k.sqlite3", readonly=True)
+    reader = open_store(location, readonly=True)
     assert [d.name for d in reader.list_documents("current")] == ["a.md"]
     with pytest.raises(StoreError):
         reader.archive("a.md", "bot")
-    with pytest.raises(sqlite3.OperationalError):
+    # Even raw SQL is refused by the database session itself (SQLite and PostgreSQL).
+    with pytest.raises(Exception, match=r"(?i)read-?only"):
         reader._db.execute("DELETE FROM documents")
+    assert store.get_document("a.md") is not None
+    reader.close()
 
 
 # ---- how the bot picks documents up ----------------------------------------------------------
@@ -275,8 +322,7 @@ def test_a_document_that_fails_validation_is_skipped_and_the_others_still_load(t
     store._db.execute(
         "UPDATE documents SET text='broken' WHERE name='b.md'"
     )  # as if edited outside the UI
-    store._db.execute("UPDATE meta SET value='99' WHERE key='revision'")
-    store._db.commit()
+    store._db.execute("UPDATE meta SET value=99 WHERE key='revision'")
     kb = live_knowledge(tmp_path, store)
     assert entry_ids(kb) == ["A1"]
 
@@ -330,13 +376,13 @@ def test_importing_the_built_in_documents_serves_exactly_what_the_image_serves(t
     assert store.import_directory(built_in) == []  # idempotent
 
 
-def test_build_knowledge_uses_the_database_only_when_configured(tmp_path, store):
+def test_build_knowledge_uses_the_database_only_when_configured(tmp_path, store, location):
     publish(store, "n.md", doc(ids=("N1",)))
     plain = replace(load_settings(), knowledge_store=None)
     assert build_knowledge(plain).directory == plain.knowledge_dir
     configured = replace(
         load_settings(),
-        knowledge_store=tmp_path / "k.sqlite3",
+        knowledge_store=location,
         knowledge_live_dir=tmp_path / "live",
     )
     kb = build_knowledge(configured)
@@ -350,3 +396,133 @@ def test_settings_read_the_database_path_from_the_environment(monkeypatch, tmp_p
     settings = load_settings()
     assert settings.knowledge_store == tmp_path / "x.sqlite3"
     assert settings.knowledge_live_dir == tmp_path / "liv"
+
+
+# ---- both backends: transactions, concurrency, addresses -------------------------------------
+def test_a_failed_write_is_rolled_back_completely(store, monkeypatch):
+    store.create_draft("a.md", doc(ids=("A1",)), "pm")
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("the database failed halfway through publishing")
+
+    monkeypatch.setattr(store, "_audit", explode)
+    with pytest.raises(RuntimeError):
+        store.publish("a.md", "pm")
+    monkeypatch.undo()
+    assert store.get_document("a.md").status == "draft"  # the status change did not stick
+    assert store.revision() == 0
+    assert (
+        len(store.history("a.md")) == 1
+    )  # only "created": the failed "published" snapshot is gone
+
+
+def test_two_admins_cannot_publish_clashing_entry_ids_at_the_same_time(store, location):
+    """Check-then-write is serialised: of two drafts that reuse an entry ID, exactly one goes live."""
+    store.create_draft("a.md", doc(ids=("X1",)), "pm")
+    store.create_draft("b.md", doc(ids=("X1",)), "pm")
+    other = open_store(location)
+    outcomes: list[str] = []
+    barrier = threading.Barrier(2)
+
+    def publish_with(target, name):
+        barrier.wait()
+        try:
+            target.publish(name, "pm")
+            outcomes.append("published")
+        except StoreError:
+            outcomes.append("refused")
+
+    threads = [
+        threading.Thread(target=publish_with, args=(store, "a.md")),
+        threading.Thread(target=publish_with, args=(other, "b.md")),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(30)
+    other.close()
+    assert sorted(outcomes) == ["published", "refused"]
+    assert len(store.list_documents("current")) == 1
+
+
+def test_reconnecting_store_opens_again_after_a_database_failure():
+    class Flaky:
+        opened = 0
+        broken_once = False  # the network fails once, whichever connection is in use
+
+        def __init__(self):
+            Flaky.opened += 1
+
+        def revision(self):
+            if not Flaky.broken_once:
+                Flaky.broken_once = True
+                raise ConnectionError("connection dropped")
+            return 7
+
+        def close(self):
+            pass
+
+    holder = ReconnectingStore(Flaky)
+    with pytest.raises(ConnectionError):
+        holder.revision()
+    assert holder.revision() == 7  # a fresh connection, not the broken one
+    assert Flaky.opened == 2
+
+
+def test_reconnecting_store_does_not_reconnect_for_a_refused_change():
+    class Strict:
+        opened = 0
+
+        def __init__(self):
+            Strict.opened += 1
+
+        def archive(self):
+            raise StoreError("refused")
+
+    holder = ReconnectingStore(Strict)
+    for _ in range(2):
+        with pytest.raises(StoreError):
+            holder.archive()
+    assert Strict.opened == 1
+
+
+def test_database_addresses_are_shown_without_their_password():
+    url = "postgresql://gab_admin:S3cret%21@db.example.com:5432/gab?sslmode=require&password=x"
+    shown = redact_location(url)
+    assert shown == "postgresql://gab_admin@db.example.com:5432/gab"
+    assert "S3cret" not in shown and "password" not in shown
+    assert redact_location("C:/data/k.sqlite3") == "C:/data/k.sqlite3"
+    assert redact_location("postgresql://[bad").startswith("postgresql://")
+
+
+def test_a_postgres_url_in_the_environment_is_kept_but_hidden(monkeypatch):
+    url = "postgresql://bot:hunter2@db.example.com/gab"
+    monkeypatch.setenv("GAB_KNOWLEDGE_DB", url)
+    settings = load_settings()
+    assert settings.knowledge_store == url
+    assert "hunter2" not in repr(settings)
+
+
+def test_the_postgres_driver_missing_is_a_clear_error(monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def refuse(name, *args, **kwargs):
+        if name == "psycopg" or name.startswith("psycopg."):
+            raise ImportError("no psycopg")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", refuse)
+    with pytest.raises(StoreError, match="psycopg"):
+        PostgresKnowledgeStore("postgresql://u:p@127.0.0.1:1/x")
+
+
+def test_postgres_unreachable_server_is_an_error_not_a_hang():
+    import time
+
+    pytest.importorskip("psycopg")
+    started = time.monotonic()
+    with pytest.raises(Exception):
+        PostgresKnowledgeStore("postgresql://u:p@127.0.0.1:1/x?connect_timeout=2")
+    assert time.monotonic() - started < 10

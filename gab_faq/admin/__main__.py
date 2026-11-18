@@ -14,10 +14,11 @@ import logging
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from aiohttp import web
 
-from ..knowledge_store import SqliteKnowledgeStore
+from ..knowledge_store import is_postgres_url, open_store, redact_location
 from .app import create_app
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -26,12 +27,13 @@ MIN_PASSWORD = 12
 
 
 def main(argv: list[str] | None = None) -> int:
+    default_store = os.environ.get("GAB_KNOWLEDGE_DB") or str(ROOT / "output" / "knowledge.sqlite3")
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument(
         "--store",
-        type=Path,
-        default=Path(os.environ.get("GAB_KNOWLEDGE_DB") or ROOT / "output" / "knowledge.sqlite3"),
-        help="knowledge database file (default: output/knowledge.sqlite3 or GAB_KNOWLEDGE_DB)",
+        default=default_store,
+        help="SQLite file or postgresql:// URL (default: GAB_KNOWLEDGE_DB, else "
+        "output/knowledge.sqlite3). Put a URL that contains a password in GAB_KNOWLEDGE_DB, not here.",
     )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8090)
@@ -60,15 +62,30 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    given_on_command_line = args.store != default_store
+    if given_on_command_line and is_postgres_url(args.store) and urlsplit(args.store).password:
+        print(
+            "Do not put the database password on the command line (other users can read it). "
+            "Set GAB_KNOWLEDGE_DB to the URL instead.",
+            file=sys.stderr,
+        )
+        return 2
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    store = SqliteKnowledgeStore(args.store)
+    try:
+        store = open_store(args.store)
+    except Exception as error:  # the message names the host and user, never the password
+        print(
+            f"Cannot open the knowledge database {redact_location(args.store)}: {error}",
+            file=sys.stderr,
+        )
+        return 1
     if args.import_builtin:
         imported = store.import_directory(args.builtin, actor="import")
         logging.info("Imported %d built-in documents", len(imported))
     app = create_app(
         store, os.environ.get("GAB_ADMIN_USER", "pm"), password, baked_dir=args.builtin
     )
-    logging.info("Knowledge database: %s", args.store)
+    logging.info("Knowledge database: %s", redact_location(args.store))
     web.run_app(app, host=args.host, port=args.port, print=None)
     return 0
 

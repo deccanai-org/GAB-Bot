@@ -190,11 +190,11 @@ def build_knowledge(settings) -> KnowledgeBase:
     (gab_faq.knowledge_store in config.yaml or GAB_KNOWLEDGE_DB), else knowledge/current/."""
     if settings.knowledge_store is None:
         return KnowledgeBase(settings.knowledge_dir)
-    from .knowledge_store import ReconnectingStore, SqliteKnowledgeStore, StoreSource
+    from .knowledge_store import ReconnectingStore, StoreSource, open_store
 
     path = settings.knowledge_store
     source = StoreSource(
-        ReconnectingStore(lambda: SqliteKnowledgeStore(path, readonly=True)),
+        ReconnectingStore(lambda: open_store(path, readonly=True)),
         baked_dir=settings.knowledge_dir,
     )
     return KnowledgeBase(settings.knowledge_live_dir, source=source)

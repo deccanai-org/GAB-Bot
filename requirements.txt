@@ -4,6 +4,8 @@ python-dotenv>=1.0.0
 aiohttp>=3.9.0
 # GAB FAQ answers
 httpx==0.28.1            # Qwen HTTPS transport; already pinned with hashes in both locks
+psycopg[binary]==3.3.6    # PostgreSQL knowledge database (admin UI and the bot's read-only sync)
+pypdf==6.21.4             # PDF text for the admin upload tab (read in a separate, secret-free process)
 fastembed==0.9.1          # free FAQ search: small embedding model, runs on the CPU
 slack_bolt==1.30.0
 slack_sdk==3.46.0
