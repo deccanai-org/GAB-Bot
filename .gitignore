@@ -32,3 +32,8 @@ output/backups/
 .coverage*
 htmlcov/
 output/knowledge-live/
+
+# Local secret bundles (real tokens); never commit
+env-files/
+env-files.zip
+rendered-deployment.yaml

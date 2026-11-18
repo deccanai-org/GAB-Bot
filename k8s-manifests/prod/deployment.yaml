@@ -1,26 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: freelancer-bots-bucketing-dev
+  name: gab-bot-prod
+  namespace: gab-bot
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: freelancer-bots-bucketing-dev
+      app: gab-bot-prod
   template:
     metadata:
       labels:
-        app: freelancer-bots-bucketing-dev
+        app: gab-bot-prod
       annotations:
         prometheus.io/scrape: 'true'
         prometheus.io/port: '8080'
         prometheus.io/path: /metrics
     spec:
       containers:
-      - name: freelancer-bots-bucketing-dev
-        image: 874846752452.dkr.ecr.ap-south-1.amazonaws.com/freelancer-bots-bucketing-dev:release-required
+      - name: gab-bot-prod
+        image: 874846752452.dkr.ecr.ap-south-1.amazonaws.com/gab-bot-prod:release-required
         command:
         - python
         - bot.py
@@ -80,10 +81,10 @@ spec:
       volumes:
       - name: secrets
         secret:
-          secretName: freelancer-bots-bucketing-dev
+          secretName: gab-bot-prod
       - name: output
         persistentVolumeClaim:
-          claimName: freelancer-bots-bucketing-output-dev
+          claimName: gab-bot-output-prod
       - name: tmp
         emptyDir:
           sizeLimit: 256Mi

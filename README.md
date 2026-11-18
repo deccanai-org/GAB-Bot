@@ -171,7 +171,7 @@ Existing JSON query data is migrated and scrubbed on first startup. Query insert
 are committed individually; a failed snapshot does not discard committed rows.
 
 The Kubernetes deployment uses a single replica, a Recreate rollout, and the
-output PVC in `k8s-manifests/dev/output-pvc.yaml`. Provision that PVC before
+output PVC in `k8s-manifests/prod/output-pvc.yaml`. Provision that PVC before
 deploying. Its StorageClass must match the cluster. Copy any required data from
 the old pod's `emptyDir` before replacing it; applying manifests does not migrate
 that live data. Slack should use its own output/log volume.
