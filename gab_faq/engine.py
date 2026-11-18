@@ -34,6 +34,7 @@ def _build_inner(settings: Settings, knowledge: KnowledgeBase):
             quota_path=settings.provider_usage_path,
             external_questions_approved=settings.external_questions_approved,
             external_history_approved=settings.external_history_approved,
+            enable_thinking=settings.enable_thinking,
         )
     if settings.engine != "search":
         raise ValueError("Unsupported answer engine")

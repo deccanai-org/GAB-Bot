@@ -77,8 +77,10 @@ only in the authorization header. The application publishes only approved text
 for IDs present in the actual request, plus the stored video links; model prose
 is discarded. Invalid or incomplete selections escalate without another call.
 
-The request is capped at 8,000 serialized UTF-8 bytes, model output at 256 tokens,
-and thinking is disabled. Per-user reservations happen before provider access.
+The request is capped at 8,000 serialized UTF-8 bytes and final model output at 1,024 tokens.
+Thinking is configurable through gab_faq.enable_thinking and is enabled in the project config.
+Reasoning chunks are discarded and bounded separately; only the validated final answer is posted.
+Per-user reservations happen before provider access.
 The optional search engine remains entirely local, with local-file loading and
 ONNX telemetry disabled. There is no automatic external-provider fallback.
 

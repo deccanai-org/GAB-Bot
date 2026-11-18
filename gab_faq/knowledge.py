@@ -56,7 +56,11 @@ class FaqDocument:
 
 
 def parse_document(path: Path) -> FaqDocument:
-    text = path.read_text(encoding="utf-8")
+    return parse_text(path.read_text(encoding="utf-8"), path)
+
+
+def parse_text(text: str, path: Path) -> FaqDocument:
+    """Parse one FAQ file's text; `path` only supplies the name and the entry source labels."""
     meta: dict = {}
     body = text
     if text.startswith("---"):
@@ -92,8 +96,11 @@ def parse_document(path: Path) -> FaqDocument:
 class KnowledgeBase:
     """Holds the current FAQ text and reloads it when a file changes."""
 
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, source=None):
+        """`source` (optional, see knowledge_store.StoreSource) fills `directory` from the
+        knowledge database; with none, `directory` is edited by hand as before."""
         self.directory = Path(directory)
+        self.source = source
         self._lock = threading.Lock()
         self._signature: tuple | None = None
         self.documents: list[FaqDocument] = []
@@ -111,6 +118,8 @@ class KnowledgeBase:
 
     def reload_if_changed(self) -> bool:
         with self._lock:
+            if self.source is not None:
+                self.source.sync(self.directory)  # never raises: keeps the last good files
             signature = self._current_signature()
             if signature == self._signature:
                 return False
@@ -174,3 +183,18 @@ class KnowledgeBase:
                 f'phase="{doc.phase}" updated="{doc.updated}">\n{doc.body}\n</faq_document>'
             )
         return "\n\n".join(parts)
+
+
+def build_knowledge(settings) -> KnowledgeBase:
+    """The FAQ the bot answers from: the knowledge database when one is configured
+    (gab_faq.knowledge_store in config.yaml or GAB_KNOWLEDGE_DB), else knowledge/current/."""
+    if settings.knowledge_store is None:
+        return KnowledgeBase(settings.knowledge_dir)
+    from .knowledge_store import ReconnectingStore, StoreSource, open_store
+
+    path = settings.knowledge_store
+    source = StoreSource(
+        ReconnectingStore(lambda: open_store(path, readonly=True)),
+        baked_dir=settings.knowledge_dir,
+    )
+    return KnowledgeBase(settings.knowledge_live_dir, source=source)

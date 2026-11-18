@@ -263,6 +263,31 @@ def _support(section: dict | None) -> SupportSettings:
 
 
 @dataclass(frozen=True)
+class KnowledgeUpdatesSettings:
+    """gab_faq.knowledge_updates in config.yaml: the private staff channel where the PM drops
+    guideline PDFs and manages Gigi's FAQ documents (see gab_faq/knowledge_updates.py)."""
+
+    enabled: bool = False
+    channel: str = "gigi-updates"  # channel name or ID
+    # Optional: role names or IDs allowed to upload and publish. Empty = everyone who can post in
+    # the channel (which must be private either way).
+    allowed_roles: tuple[str, ...] = ()
+
+
+def _knowledge_updates(section: dict | None) -> KnowledgeUpdatesSettings:
+    section = section or {}
+    d = KnowledgeUpdatesSettings()
+    roles = section.get("allowed_roles") or []
+    if not isinstance(roles, list) or not all(isinstance(r, (str, int)) for r in roles):
+        raise ValueError("gab_faq.knowledge_updates.allowed_roles must be a list of role names")
+    return KnowledgeUpdatesSettings(
+        enabled=section.get("enabled", d.enabled) is True,
+        channel=str(section.get("channel") or d.channel).strip().lstrip("#"),
+        allowed_roles=tuple(str(r).strip() for r in roles if str(r).strip()),
+    )
+
+
+@dataclass(frozen=True)
 class Settings:
     runtime: RuntimeSettings = field(default_factory=RuntimeSettings)
     enabled: bool = False
@@ -275,14 +300,22 @@ class Settings:
     local_backstop: bool = True
     external_questions_approved: bool = False
     external_history_approved: bool = False
+    enable_thinking: bool = False
     provider_usage_path: Path = PROJECT_ROOT / "output" / "provider_usage.sqlite3"
     followup: FollowupSettings = field(default_factory=FollowupSettings)
     # Contacts, /throttle-request and /task-issue (routing.py, support.py).
     support: SupportSettings = field(default_factory=SupportSettings)
+    knowledge_updates: KnowledgeUpdatesSettings = field(default_factory=KnowledgeUpdatesSettings)
     environment: str = "staging"  # staging (replies start with [TEST BOT]) | production
     max_history_messages: int = 4
     model_limits: ModelLimits = field(default_factory=ModelLimits)
     knowledge_dir: Path = PROJECT_ROOT / "knowledge" / "current"
+    # Optional knowledge database edited through the admin UI (gab_faq.admin). When set, the bot
+    # serves the published documents from it; knowledge_dir stays the built-in fallback and
+    # knowledge_live_dir is where the published files are written for the bot to read.
+    # A SQLite file path or a postgresql:// URL (the URL holds the password: hidden from repr).
+    knowledge_store: Path | str | None = field(default=None, repr=False)
+    knowledge_live_dir: Path = Path("output") / "knowledge-live"
     # Where questions are logged. Same folder the rest of the bot saves its files in.
     log_dir: Path = Path("output")
     discord: PlatformSettings = field(default_factory=PlatformSettings)
@@ -297,8 +330,17 @@ class Settings:
             raise ValueError(f"engine must be one of {ENGINES}")
         if self.engine == "qwen" and self.model != QWEN_MODEL:
             raise ValueError(f"gab_faq.model must be {QWEN_MODEL!r} for the qwen engine")
+        if type(self.enable_thinking) is not bool:
+            raise ValueError("gab_faq.enable_thinking must be true or false")
         if not 0 <= self.max_history_messages <= 50:
             raise ValueError("max_history_messages must be between 0 and 50")
+
+
+def _store_location(value) -> Path | str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    return text if text.startswith(("postgres://", "postgresql://")) else Path(text)
 
 
 def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
@@ -319,6 +361,11 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
     engine = str(faq.get("engine", "qwen")).strip().lower()
     if engine not in ENGINES:
         raise ValueError(f"gab_faq.engine in config.yaml must be one of {ENGINES}, got {engine!r}")
+    store = faq.get("knowledge_store")
+    store_path = os.environ.get("GAB_KNOWLEDGE_DB") or (
+        store.get("path") if isinstance(store, dict) else store
+    )
+    log_dir = Path(faq.get("log_dir") or cfg.get("output_dir") or "output")
     return Settings(
         runtime=RuntimeSettings.parse(cfg.get("runtime")),
         enabled=bool(faq.get("enabled", False)),
@@ -328,6 +375,7 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         local_backstop=bool(faq.get("local_backstop", True)),
         external_questions_approved=faq.get("external_questions_approved") is True,
         external_history_approved=faq.get("external_history_approved") is True,
+        enable_thinking=faq.get("enable_thinking", False),
         provider_usage_path=Path(
             os.environ.get("GAB_PROVIDER_USAGE_PATH")
             or faq.get("provider_usage_path")
@@ -335,11 +383,18 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         ),
         followup=_followup(faq.get("followup")),
         support=_support(faq.get("support")),
+        knowledge_updates=_knowledge_updates(faq.get("knowledge_updates")),
         environment=environment,
         max_history_messages=int(faq.get("max_history_messages", 4)),
         model_limits=ModelLimits.parse(faq.get("model_limits")),
         knowledge_dir=knowledge_dir,
-        log_dir=Path(faq.get("log_dir") or cfg.get("output_dir") or "output"),
+        knowledge_store=_store_location(store_path),
+        knowledge_live_dir=Path(
+            os.environ.get("GAB_KNOWLEDGE_LIVE_DIR")
+            or faq.get("knowledge_live_dir")
+            or log_dir / "knowledge-live"
+        ),
+        log_dir=log_dir,
         discord=_platform(faq.get("discord")),
         slack=_platform(faq.get("slack")),
         discord_token=os.environ.get("DISCORD_TOKEN", ""),

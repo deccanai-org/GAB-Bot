@@ -5,6 +5,29 @@ Engine `qwen`, model `qwen3-omni-flash`, Alibaba Cloud Model Studio, Singapore e
 `DASHSCOPE_API_KEY` (ignored `.env`, environment, or the `/app/secrets` file mount). TLS uses the
 system trust store with certificate and hostname verification; redirects are never followed.
 
+## Live thinking check (16 November 2026)
+
+Checked commit `1303300` after explicit approval to send the prepared synthetic question and
+retrieved GAB FAQ excerpts to Alibaba. Thinking was enabled, text-only streaming was used, and
+no earlier conversation history was sent.
+
+| Question | Result | Provider calls |
+| --- | --- | --- |
+| "what is gab" | Answered locally from current FAQ U1; no escalation | 0 |
+| "what are you" | Local Gigi identity reply; no escalation | 0 |
+| "Which model should I use for my GAB task?" | Grounded Qwen answer citing IN5 and U1; Model A only, `1p-old -> flash_1p_old_test_arm`, check before every message; no escalation | 1 |
+
+The one live request used 1,375 input tokens and 583 completion tokens: 400 reasoning tokens
+and 183 final text tokens (1,958 total). The probe counted 1,597 bytes of reasoning without
+printing or retaining that reasoning. The final reply combined the overlapping FAQ entries into
+one explanation. The affected offline regression suite also passed: **289 tests**.
+
+This is a narrow check of these questions, not a new aggregate answer-quality measurement.
+The probe used the same guarded answer engine as Discord, but did not connect to Discord or
+send a Discord message. Deployment/restart of the running bot remains necessary.
+
+Raw local result: `artifacts/thinking-probe-2026-11-16.json` (ignored, no reasoning text or secrets).
+
 ## Live results (15 November 2026, evening)
 
 Qwen was turned on by the project owner (`external_questions_approved: true`; history still not
@@ -43,7 +66,7 @@ written by the assistant, not taken from real freelancers: re-run on real pilot 
   question to a person. The exact fields sent are in [outbound-payload.md](outbound-payload.md).
 - The answer modes (grounded explanations, labelled general guidance, clarifications, code-owned
   routing) are described in [answer-flow.md](answer-flow.md).
-- The unit tests (455) use mocked HTTP responses and synthetic fixtures; they check validation,
+- The unit tests use mocked HTTP responses and synthetic fixtures; they check validation,
   rendering, routing and limits. Live quality is the table above, not the unit tests.
 
 ## Provider facts this design relies on
@@ -51,16 +74,17 @@ written by the assistant, not taken from real freelancers: re-run on real pilot 
 The [model page](https://www.alibabacloud.com/help/en/model-studio/qwen3-omni-flash) states that
 structured output is unsupported and the
 [access guide](https://www.alibabacloud.com/help/en/model-studio/qwen-omni) requires streaming and
-supports disabling thinking. The adapter therefore streams text only, with thinking off, asks for a
-JSON object, and validates it locally (`grounding.grounded_answer`).
+supports enabling thinking. The adapter streams text only, asks for a JSON object, and validates
+it locally (`grounding.grounded_answer`). Thinking is enabled in the project configuration with
+`gab_faq.enable_thinking: true`; reasoning is discarded and only the final answer is published.
 
 ## Limits
 
-| Limit | Default | Setting |
+| Limit | Project configuration | Setting |
 | --- | --- | --- |
 | Estimated input tokens per request | 2,000 (bytes / 3) | `model_limits.max_input_tokens` |
 | Serialized request size | 8,000 bytes | `model_limits.max_prompt_bytes` |
-| Output tokens | 300 | `model_limits.max_output_tokens` |
+| Final output tokens | 1,024 | `model_limits.max_output_tokens` |
 | Provider requests per question (all retries) | 3 | `model_limits.provider_calls_per_question` |
 | Rate-limit retries per request (429/502/503/504) | 2 | `model_limits.provider_max_retries` |
 | Provider requests per minute, whole bot | 50 | `model_limits.provider_requests_per_minute` |

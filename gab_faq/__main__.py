@@ -28,7 +28,8 @@ from pathlib import Path
 
 from .config import CONFIG_PATH, load_environment, load_settings
 from .engine import build_engine, describe
-from .knowledge import KnowledgeBase
+from .knowledge import KnowledgeBase, build_knowledge
+from .knowledge_store import redact_location
 from .model_limits import answer_as_user
 from .replies import QuestionLog, format_reply
 from .storage import configure_logging
@@ -46,6 +47,7 @@ def qwen_status(settings) -> list[str]:
         f"  questions sent to Qwen:     {settings.external_questions_approved}"
         + ("" if settings.external_questions_approved else "  (off: GAB questions go to people)"),
         f"  thread history sent:        {settings.external_history_approved}",
+        f"  thinking enabled:           {settings.enable_thinking}",
         f"  DASHSCOPE_API_KEY set:      {bool(key)}"
         + (f" (starts with sk-: {key.startswith('sk-')})" if key else ""),
         f"  budget:                     ~{settings.model_limits.max_input_tokens} input / "
@@ -60,7 +62,12 @@ def check(settings, knowledge: KnowledgeBase) -> int:
         f"FAQ answering enabled: {settings.enabled}   Environment: {settings.environment}   "
         f"Engine: {describe(settings)}"
     )
-    print(f"FAQ files loaded from {settings.knowledge_dir}:")
+    if settings.knowledge_store:
+        print(
+            f"Knowledge database: {redact_location(settings.knowledge_store)} "
+            f"(built-in fallback: {settings.knowledge_dir})"
+        )
+    print(f"FAQ files loaded from {knowledge.directory}:")
     for doc in knowledge.documents:
         print(
             f"  - {doc.path.name}: {doc.title} (audience={doc.audience}, phase={doc.phase}, updated={doc.updated})"
@@ -226,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     load_environment()
     settings = load_settings()
-    knowledge = KnowledgeBase(settings.knowledge_dir)
+    knowledge = build_knowledge(settings)
     if args.command == "check":
         return check(settings, knowledge)
     if settings.engine == "qwen" and not settings.dashscope_api_key_set:

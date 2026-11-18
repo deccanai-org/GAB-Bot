@@ -16,6 +16,20 @@ jobs:
       DASHSCOPE_API_KEY: ""
       SLACK_BOT_TOKEN: ""
       SLACK_APP_TOKEN: ""
+      # Throwaway database for the knowledge-store tests (the full gate fails on skipped tests).
+      GAB_TEST_POSTGRES_URL: "postgresql://postgres:ci-only-password@127.0.0.1:5432/postgres"
+    services:
+      postgres:
+        image: postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea # postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

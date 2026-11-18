@@ -312,6 +312,7 @@ gab_faq:
   # Set search for fully local retrieval without an external model.
   engine: qwen
   model: qwen3-omni-flash
+  enable_thinking: true  # reason internally; publish only the validated final answer
 
   # Local BM25 searches the entire approved FAQ. Exact matches are rendered locally.
   # A provider failure is never replaced by a semantically "close" answer.
@@ -339,7 +340,7 @@ gab_faq:
     questions_per_minute: 3      # shared across that user's channels
     max_prompt_bytes: 8000       # complete serialized UTF-8 request, including history and FAQ
     max_input_tokens: 2000       # planning estimate (bytes / 3); actual provider usage is logged
-    max_output_tokens: 300       # the JSON reply: explanation, quotes, general guidance
+    max_output_tokens: 1024      # final JSON: explanation, quotes and general guidance
     retrieval_candidates: 6
     provider_tokens_per_minute: 90000
     provider_queue_capacity: 16
@@ -398,6 +399,17 @@ gab_faq:
     # Who the reminder tags: "<@&ROLE_ID>" for a role (e.g. the GAB support team), "<@USER_ID>"
     # for a person; several separated by spaces. Empty = no one is tagged.
     reminder_mention: ""
+
+  # The PM's upload channel. In this PRIVATE staff channel Gigi turns a guideline PDF into a draft
+  # (not live), shows the checks, and publishes only when the PM presses a button; "list", "get",
+  # "archive", "restore", "delete" and "qwen" manage the documents. Needs the secret
+  # GAB_KNOWLEDGE_ADMIN_DB (the database account that may write) and, for answers to change,
+  # GAB_KNOWLEDGE_DB (the bot's read-only account). Gigi refuses to work in a channel that
+  # @everyone can read. Off until enabled: true.
+  knowledge_updates:
+    enabled: false
+    channel: gigi-updates      # channel name or ID
+    allowed_roles: []          # optional role names/IDs; empty = anyone who can post in the channel
 
   # Who handles what, and the two request forms (/throttle-request, /task-issue).
   # Routing is decided by code from this table (gab_faq/routing.py), never by the AI: when the FAQ

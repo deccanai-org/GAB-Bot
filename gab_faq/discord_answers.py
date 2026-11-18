@@ -23,7 +23,8 @@ from .discord_common import readable_channels as readable_channels
 from .discord_common import strip_mentions as strip_mentions
 from .engine import build_engine, describe
 from .followup import Followup, card_footer
-from .knowledge import KnowledgeBase
+from .knowledge import build_knowledge
+from .knowledge_updates import build_knowledge_updates
 from .model_limits import answer_as_user
 from .operations import BoundedAnswers, Busy
 from .redact import redact_secrets
@@ -116,15 +117,22 @@ class FaqAnswerer:
         )
         self._delivery_locks = WeakValueDictionary()
         self.followup = Followup(self, settings.followup)
+        # The PM's private upload channel (None unless switched on in config.yaml).
+        self.updates = build_knowledge_updates(bot, settings)
 
     async def start(self) -> None:
         """Called during application setup."""
         await self.followup.start()
+        if self.updates:
+            await self.updates.start()
 
     async def handle(self, message: discord.Message) -> bool:
         """Answer the message if it's for the bot. Returns True if it answered. Never raises: a
         problem here must not stop the rest of the bot."""
         try:
+            # Everything said in the staff updates channel belongs to it, never to the FAQ.
+            if self.updates and await self.updates.handle(message):
+                return True
             return await self._handle(message)
         except Exception:
             log.exception("[FAQ] Failed to answer message %s", message.id)
@@ -143,7 +151,8 @@ class FaqAnswerer:
             in_answer_channel=not is_thread and platform.is_answer_channel(*own),
             in_answer_thread=is_thread and platform.is_answer_channel(*parent),
             answer_in_dms=platform.answer_in_dms,
-            in_scope=platform.in_scope(*own, *parent),
+            in_scope=platform.in_scope(*own, *parent)
+            or bool(self.updates and self.updates.in_extra_scope(*own, *parent)),
         )
         if decision is None:
             return False
@@ -427,7 +436,7 @@ def _setup(bot: discord.Client, config_path=None) -> FaqAnswerer | None:
             "[FAQ] Answering is OFF: Qwen requires DASHSCOPE_API_KEY; no provider fallback is used"
         )
         return None
-    knowledge = KnowledgeBase(settings.knowledge_dir)
+    knowledge = build_knowledge(settings)
     brain = build_engine(settings, knowledge)
     question_log = QuestionLog(settings.log_dir, environment=settings.environment)
     d = settings.discord
