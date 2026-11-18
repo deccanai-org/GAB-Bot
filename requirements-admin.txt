@@ -1,0 +1,3 @@
+# Admin UI only (python -m gab_faq.admin). The bot image does not install or import these.
+-r requirements.txt
+pypdf==6.14.2

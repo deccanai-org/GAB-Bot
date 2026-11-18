@@ -23,7 +23,7 @@ from .discord_common import readable_channels as readable_channels
 from .discord_common import strip_mentions as strip_mentions
 from .engine import build_engine, describe
 from .followup import Followup, card_footer
-from .knowledge import KnowledgeBase
+from .knowledge import build_knowledge
 from .model_limits import answer_as_user
 from .operations import BoundedAnswers, Busy
 from .redact import redact_secrets
@@ -427,7 +427,7 @@ def _setup(bot: discord.Client, config_path=None) -> FaqAnswerer | None:
             "[FAQ] Answering is OFF: Qwen requires DASHSCOPE_API_KEY; no provider fallback is used"
         )
         return None
-    knowledge = KnowledgeBase(settings.knowledge_dir)
+    knowledge = build_knowledge(settings)
     brain = build_engine(settings, knowledge)
     question_log = QuestionLog(settings.log_dir, environment=settings.environment)
     d = settings.discord

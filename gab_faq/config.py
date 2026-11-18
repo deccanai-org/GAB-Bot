@@ -284,6 +284,11 @@ class Settings:
     max_history_messages: int = 4
     model_limits: ModelLimits = field(default_factory=ModelLimits)
     knowledge_dir: Path = PROJECT_ROOT / "knowledge" / "current"
+    # Optional knowledge database edited through the admin UI (gab_faq.admin). When set, the bot
+    # serves the published documents from it; knowledge_dir stays the built-in fallback and
+    # knowledge_live_dir is where the published files are written for the bot to read.
+    knowledge_store: Path | None = None
+    knowledge_live_dir: Path = Path("output") / "knowledge-live"
     # Where questions are logged. Same folder the rest of the bot saves its files in.
     log_dir: Path = Path("output")
     discord: PlatformSettings = field(default_factory=PlatformSettings)
@@ -322,6 +327,11 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
     engine = str(faq.get("engine", "qwen")).strip().lower()
     if engine not in ENGINES:
         raise ValueError(f"gab_faq.engine in config.yaml must be one of {ENGINES}, got {engine!r}")
+    store = faq.get("knowledge_store")
+    store_path = os.environ.get("GAB_KNOWLEDGE_DB") or (
+        store.get("path") if isinstance(store, dict) else store
+    )
+    log_dir = Path(faq.get("log_dir") or cfg.get("output_dir") or "output")
     return Settings(
         runtime=RuntimeSettings.parse(cfg.get("runtime")),
         enabled=bool(faq.get("enabled", False)),
@@ -343,7 +353,13 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         max_history_messages=int(faq.get("max_history_messages", 4)),
         model_limits=ModelLimits.parse(faq.get("model_limits")),
         knowledge_dir=knowledge_dir,
-        log_dir=Path(faq.get("log_dir") or cfg.get("output_dir") or "output"),
+        knowledge_store=Path(str(store_path)) if store_path else None,
+        knowledge_live_dir=Path(
+            os.environ.get("GAB_KNOWLEDGE_LIVE_DIR")
+            or faq.get("knowledge_live_dir")
+            or log_dir / "knowledge-live"
+        ),
+        log_dir=log_dir,
         discord=_platform(faq.get("discord")),
         slack=_platform(faq.get("slack")),
         discord_token=os.environ.get("DISCORD_TOKEN", ""),
