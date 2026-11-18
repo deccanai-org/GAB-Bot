@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import json
 import logging
 import re
 import shutil
@@ -39,7 +40,7 @@ log = logging.getLogger(__name__)
 
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}\.md$")
 STATUSES = ("draft", "current", "archived")
-SUPPORT_FILES = ("entry-policy.yaml", "playground-videos.yaml")
+SUPPORT_FILES = ("entry-policy.yaml", "playground-videos.yaml", "answer-channels.json")
 MAX_TEXT_BYTES = 1_000_000
 MAX_PDF_BYTES = 25 * 1024 * 1024
 
@@ -61,8 +62,9 @@ def check_pdf(data: bytes) -> None:
 
 
 def slugify(text: str, fallback: str = "document") -> str:
-    """A safe document file name ("My FAQ v2.pdf" -> "my-faq-v2.md")."""
-    stem = re.sub(r"\.[A-Za-z0-9]{1,5}$", "", text.strip())
+    """A safe document file name ("My FAQ v2.pdf" -> "my-faq-v2.md"). Only a real file extension
+    is removed, so a version number survives ("Guide v6.1" -> "guide-v6-1.md")."""
+    stem = re.sub(r"\.(pdf|md|txt|docx?|rtf)$", "", text.strip(), flags=re.IGNORECASE)
     slug = re.sub(r"[^a-z0-9]+", "-", stem.lower()).strip("-")[:58].strip("-")
     return f"{slug or fallback}.md"
 
@@ -408,6 +410,15 @@ class KnowledgeStore:
             rows = self._db.execute("SELECT text FROM support WHERE name=?", (name,))
             return rows[0]["text"] if rows else None
 
+    def list_pdfs(self, limit: int = 200) -> list[dict]:
+        """The uploaded PDFs (name, size, who, when), newest first, without the file bytes."""
+        with self._lock:
+            return self._db.execute(
+                "SELECT sha256, filename, size, uploaded_at, uploaded_by FROM pdfs "
+                "ORDER BY uploaded_at DESC LIMIT ?",
+                (limit,),
+            )
+
     def get_pdf(self, sha256: str) -> tuple[str, bytes] | None:
         with self._lock:
             rows = self._db.execute("SELECT filename, data FROM pdfs WHERE sha256=?", (sha256,))
@@ -645,6 +656,13 @@ class KnowledgeStore:
             data = yaml.safe_load(text) or {}
             if not isinstance(data, dict):
                 raise StoreError("entry-policy.yaml must contain a mapping.")
+        if name == "answer-channels.json":
+            try:
+                data = json.loads(text)
+            except ValueError:
+                raise StoreError("answer-channels.json must be JSON.") from None
+            if not isinstance(data, dict) or not isinstance(data.get("channels"), list):
+                raise StoreError("answer-channels.json must hold a channels list.")
         with self._lock, self._tx():
             self._db.execute(
                 "INSERT INTO support(name, text, updated_at, updated_by) VALUES(?,?,?,?) "

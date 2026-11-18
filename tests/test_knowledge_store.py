@@ -526,3 +526,23 @@ def test_postgres_unreachable_server_is_an_error_not_a_hang():
     with pytest.raises(Exception):
         PostgresKnowledgeStore("postgresql://u:p@127.0.0.1:1/x?connect_timeout=2")
     assert time.monotonic() - started < 10
+
+
+def test_slugify_removes_only_real_file_extensions():
+    assert slugify("Guide v6.1") == "guide-v6-1.md"
+    assert slugify("Guide v6.1.pdf") == "guide-v6-1.md"
+    assert slugify("NOTES.PDF") == "notes.md"
+    assert slugify("a.docx") == "a.md" and slugify("a.b.c") == "a-b-c.md"
+
+
+def test_uploaded_pdfs_are_listed_without_their_bytes(store):
+    assert store.list_pdfs() == []
+    store.put_pdf(b"%PDF-1.4 first", "First Guide.pdf", "Priya (discord:1)")
+    store.put_pdf(b"%PDF-1.4 second!", "Second.pdf", "Rae (discord:2)")
+    rows = store.list_pdfs()
+    assert [r["filename"] for r in rows] == ["Second.pdf", "First Guide.pdf"] or {
+        r["filename"] for r in rows
+    } == {"First Guide.pdf", "Second.pdf"}
+    first = next(r for r in rows if r["filename"] == "First Guide.pdf")
+    assert first["size"] == len(b"%PDF-1.4 first") and first["uploaded_by"] == "Priya (discord:1)"
+    assert "data" not in first and len(first["sha256"]) == 64

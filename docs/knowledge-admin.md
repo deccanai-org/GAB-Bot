@@ -5,9 +5,29 @@ The GAB PM manages Gigi's FAQ documents from a **private staff-only Discord chan
 website, no image rebuild. The documents live in a database (PostgreSQL in the cluster); the bot
 answers from the published ones.
 
+## The button panel
+
+Gigi keeps a **panel** pinned in the channel (it posts or refreshes it at start-up; say `panel` to
+post it again). Everything below is also available from its buttons:
+
+| Button | What it does |
+| --- | --- |
+| **Upload PDF** | opens a file-picker dialog (PDF with selectable text, up to 25 MB, optional title); Gigi drafts entries and shows the draft for review. Nothing is live. |
+| **Documents** | lists every document; pick one for its buttons: Download .md, Publish / Publish & allow Qwen (drafts), Archive and Allow/Stop Qwen (live), Restore (archived), **Delete…** with confirmation (drafts and archived). |
+| **Uploaded files** | the PDFs uploaded so far (who, when, and which document each became) and the tutorial videos Gigi knows, with their links. |
+| **Add video link** | a dialog for a title, a **Google Drive link** (`drive.google.com` / `docs.google.com` only) and the FAQ entry IDs it explains (for example `A5, PG3`). Gigi then shows the link under those answers. It adds to the existing tutorial catalog (it never replaces it) and refuses entry IDs that are not in a live document. |
+| **Archive everything** | asks which live documents to **keep**, shows what would be archived, and archives the rest after you confirm. Gigi always keeps at least one live document, so you cannot archive them all: publish the new ones first, then keep those. Drafts are untouched; archived documents can be restored. |
+| **Gigi in other channels** | choose a channel and Gigi answers there **only when someone @mentions it** (never unprompted); it needs View Channel and Send Messages there and asks for confirmation first. The list shows what is on and lets you turn a channel off. The choice is saved and survives restarts; the channels in `config.yaml` keep working as before. |
+| **Import built-in** | once, before the first publish (see "Setting it up"). |
+
+Videos themselves are **not uploaded**: the tutorial videos are links (Google Drive) that Gigi
+shows next to matching answers. To add a video, put it on Drive (shared as "anyone with the link
+can view") and use **Add video link**. Storing the MP4 in Gigi would need a file host (a Drive
+API account or a storage bucket), which is not set up.
+
 ## What the PM does
 
-1. **Drop a PDF** in the channel (optionally with a title as the message text).
+1. **Press Upload PDF** (or drop a PDF in the channel; optionally with a title as the message text).
 2. Gigi replies with a **draft**: an embed (entries found, the checks, warnings) and the draft as
    an attached `<name>.md`. The text is read in a separate, restricted process. **Nothing is live.**
 3. To change the draft, edit the `.md` and **post it back** in the channel under the same name.
@@ -26,6 +46,7 @@ Other commands (exact forms, so ordinary chat in the channel is ignored):
 | `delete <name>` | asks for confirmation, then deletes a draft or archived document for good (saved versions and the activity log stay) |
 | `qwen <name> on` / `off` | lets Qwen use, or stop using, a document |
 | `import builtin` | **once, before the first publish:** loads the FAQ documents built into the image |
+| `panel` | posts the button panel again (refreshes the pinned one if it is there) |
 | `help` | this list |
 
 Gigi will not archive the last live document, and will not publish into an empty database (see the
@@ -63,7 +84,8 @@ If `GAB_KNOWLEDGE_ADMIN_DB` is missing the channel stays off and the log says wh
 
 * Only the configured channel is used, never a thread or DM, and only if `@everyone` cannot read it.
   Anything said there belongs to this feature: it is never treated as a question for the FAQ.
-* `allowed_roles` (if set) is checked on every message and every button press.
+* `allowed_roles` (if set) is checked on every message, button, menu and dialog, together with
+  "right channel" and "channel is private" (not only when the panel is shown).
 * A draft is never served. Publishing is a button or command; Qwen access is its own button.
 * Every change is recorded with who made it (Discord name and ID) in the activity log.
 * PDF text is read by a **separate process** that receives none of the bot's secrets (no Discord

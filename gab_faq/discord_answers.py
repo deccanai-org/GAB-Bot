@@ -151,7 +151,8 @@ class FaqAnswerer:
             in_answer_channel=not is_thread and platform.is_answer_channel(*own),
             in_answer_thread=is_thread and platform.is_answer_channel(*parent),
             answer_in_dms=platform.answer_in_dms,
-            in_scope=platform.in_scope(*own, *parent),
+            in_scope=platform.in_scope(*own, *parent)
+            or bool(self.updates and self.updates.in_extra_scope(*own, *parent)),
         )
         if decision is None:
             return False

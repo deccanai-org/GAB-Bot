@@ -124,6 +124,11 @@ class FaqBot(commands.Bot):
                 await self.panels.ensure(guild)
             except discord.HTTPException:
                 log.exception("Could not update FAQ panel for guild %s", guild.id)
+        if self.faq_answers and self.faq_answers.updates:
+            try:  # the button panel in the staff updates channel (never stops the bot starting)
+                await self.faq_answers.updates.ensure_panels(self.guilds)
+            except Exception:
+                log.exception("Could not post the updates panel")
 
     async def on_message(self, message):
         if self.draining:

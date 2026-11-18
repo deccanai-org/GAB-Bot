@@ -31,3 +31,4 @@ output/*.lock
 output/backups/
 .coverage*
 htmlcov/
+output/knowledge-live/
