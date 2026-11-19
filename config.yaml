@@ -408,7 +408,7 @@ gab_faq:
   # @everyone can read. Off until enabled: true.
   knowledge_updates:
     enabled: true
-    channel: gigi-updates      # channel name or ID
+    channel: gigi_control-panel  # channel name or ID
     allowed_roles: []          # optional role names/IDs; empty = anyone who can post in the channel
 
   # Who handles what, and the two request forms (/throttle-request, /task-issue).
