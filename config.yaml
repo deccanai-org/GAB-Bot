@@ -407,7 +407,7 @@ gab_faq:
   # GAB_KNOWLEDGE_DB (the bot's read-only account). Gigi refuses to work in a channel that
   # @everyone can read. Off until enabled: true.
   knowledge_updates:
-    enabled: false
+    enabled: true
     channel: gigi-updates      # channel name or ID
     allowed_roles: []          # optional role names/IDs; empty = anyone who can post in the channel
 
