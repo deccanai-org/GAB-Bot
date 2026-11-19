@@ -119,7 +119,13 @@ pipeline {
                         if (status != 0) {
                             sh '''
                                 kubectl get pods -n "$NAMESPACE" -l app="$DEPLOYMENT" -o wide || true
-                                kubectl logs -n "$NAMESPACE" deployment/"$DEPLOYMENT" --tail=80 || true
+                                kubectl describe pods -n "$NAMESPACE" -l app="$DEPLOYMENT" || true
+                                kubectl logs -n "$NAMESPACE" deployment/"$DEPLOYMENT" --tail=200 || true
+                                kubectl logs -n "$NAMESPACE" deployment/"$DEPLOYMENT" --previous --tail=200 || true
+                                POD=$(kubectl get pods -n "$NAMESPACE" -l app="$DEPLOYMENT" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+                                if [ -n "$POD" ]; then
+                                  kubectl exec -n "$NAMESPACE" "$POD" -- sh -c 'cat /tmp/debug-8115a4.log 2>/dev/null || true' || true
+                                fi
                             '''
                             echo "Deployment ${env.DEPLOYMENT} did not become ready. Rolling back..."
                             sh 'kubectl rollout undo deployment/"$DEPLOYMENT" -n "$NAMESPACE"'

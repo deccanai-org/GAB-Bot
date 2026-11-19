@@ -29,6 +29,33 @@ from .views import FAQPanelView, PanelManager, TimeFrameView, WhatElseView
 log = logging.getLogger(__name__)
 
 
+# #region agent log
+def _agent_dbg(hypothesis_id: str, location: str, message: str, data: dict | None = None) -> None:
+    """Session 8115a4: emit readiness debug evidence to logger (+ /tmp when writable)."""
+    import json as _json
+
+    payload = {
+        "sessionId": "8115a4",
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data or {},
+        "timestamp": int(time.time() * 1000),
+        "runId": os.environ.get("BUILD_NUMBER") or os.environ.get("HOSTNAME") or "local",
+    }
+    line = _json.dumps(payload, default=str)
+    log.info("DEBUG_8115a4 %s", line)
+    for path in ("/tmp/debug-8115a4.log",):
+        try:
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
+        except OSError:
+            pass
+
+
+# #endregion
+
+
 class FaqBot(commands.Bot):
     def __init__(self, settings: BotSettings, config_path: Path):
         intents = discord.Intents.default()
@@ -94,11 +121,25 @@ class FaqBot(commands.Bot):
                     "Production requires the embedding model; keyword-only fallback is degraded"
                 )
         self._initialized = True
+        # #region agent log
+        _agent_dbg(
+            "D",
+            "app.py:setup_hook",
+            "before tree.sync",
+            {"initialized": self._initialized, "production": self.settings.production},
+        )
+        # #endregion
         try:
             await self.tree.sync()
             self._commands_ok = True
+            # #region agent log
+            _agent_dbg("D", "app.py:setup_hook", "tree.sync ok", {"commands_ok": True})
+            # #endregion
         except discord.HTTPException:
             log.exception("Could not synchronize Discord application commands")
+            # #region agent log
+            _agent_dbg("D", "app.py:setup_hook", "tree.sync failed", {"commands_ok": False})
+            # #endregion
         self.snapshot_loop.start()
         if self.moderation.enabled and self.moderation.audit_enabled:
             self.audit_loop.change_interval(minutes=max(1, self.moderation.audit_interval))
@@ -106,7 +147,27 @@ class FaqBot(commands.Bot):
 
     async def on_ready(self):
         log.info("Bot online as %s", self.user)
+        # #region agent log
+        _agent_dbg(
+            "D",
+            "app.py:on_ready",
+            "gateway ready",
+            {
+                "user": str(self.user),
+                "guild_count": len(self.guilds),
+                "guild_names": [g.name for g in self.guilds][:5],
+            },
+        )
+        # #endregion
         self._routes_ok = self.validate_routes()
+        # #region agent log
+        _agent_dbg(
+            "A",
+            "app.py:on_ready",
+            "after validate_routes",
+            {"routes_ok": self._routes_ok, "readiness": self.readiness()},
+        )
+        # #endregion
         if self._ready_once:
             return
         self._ready_once = True
@@ -210,6 +271,14 @@ class FaqBot(commands.Bot):
             return True
         if len(self.guilds) != 1:
             log.error("Production is configured for exactly one Discord guild")
+            # #region agent log
+            _agent_dbg(
+                "C",
+                "app.py:validate_routes",
+                "guild count != 1",
+                {"guild_count": len(self.guilds), "guild_names": [g.name for g in self.guilds]},
+            )
+            # #endregion
             return False
         if not self.faq_answers:
             return not self.settings.faq_required
@@ -224,13 +293,37 @@ class FaqBot(commands.Bot):
         missing = platform.unmatched_answer_channels(keys)
         if missing:
             log.error("Configured answer channels match nothing in the guild: %s", missing)
+            # #region agent log
+            _agent_dbg("A", "app.py:validate_routes", "answer channels missing", {"missing": missing})
+            # #endregion
             return False
         staff = find_text_channel(guild, platform.unanswered_channel)
         if staff is None or guild.me is None:
             log.error("Staff destination or bot guild member is unavailable")
+            # #region agent log
+            _agent_dbg(
+                "A",
+                "app.py:validate_routes",
+                "staff channel or me missing",
+                {
+                    "wanted": platform.unanswered_channel,
+                    "staff_found": staff is not None,
+                    "me_ok": guild.me is not None,
+                    "visible_text_channels": [c.name for c in guild.text_channels][:40],
+                },
+            )
+            # #endregion
             return False
         if staff.permissions_for(guild.default_role).view_channel:
             log.error("Staff destination must deny View Channel to @everyone")
+            # #region agent log
+            _agent_dbg(
+                "B",
+                "app.py:validate_routes",
+                "staff channel is public",
+                {"channel": staff.name, "id": staff.id},
+            )
+            # #endregion
             return False
         targets.append(staff)
         requests = self.faq_answers.settings.support.requests_channel
@@ -241,22 +334,48 @@ class FaqBot(commands.Bot):
                 or request_channel.permissions_for(guild.default_role).view_channel
             ):
                 log.error("Support request destination is missing or public")
+                # #region agent log
+                _agent_dbg(
+                    "A",
+                    "app.py:validate_routes",
+                    "requests channel missing/public",
+                    {"wanted": requests, "found": request_channel is not None},
+                )
+                # #endregion
                 return False
             targets.append(request_channel)
         for channel in targets:
             permissions = channel.permissions_for(guild.me)
-            if not all(
-                getattr(permissions, name)
-                for name in (
-                    "view_channel",
-                    "read_message_history",
-                    "send_messages",
-                    "embed_links",
-                    "attach_files",
-                )
-            ):
+            needed = (
+                "view_channel",
+                "read_message_history",
+                "send_messages",
+                "embed_links",
+                "attach_files",
+            )
+            if not all(getattr(permissions, name) for name in needed):
                 log.error("Bot lacks required permissions in channel %s", channel.id)
+                # #region agent log
+                _agent_dbg(
+                    "E",
+                    "app.py:validate_routes",
+                    "missing channel permissions",
+                    {
+                        "channel": channel.name,
+                        "id": channel.id,
+                        "perms": {name: bool(getattr(permissions, name)) for name in needed},
+                    },
+                )
+                # #endregion
                 return False
+        # #region agent log
+        _agent_dbg(
+            "A",
+            "app.py:validate_routes",
+            "routes ok",
+            {"staff": staff.name, "target_count": len(targets)},
+        )
+        # #endregion
         return True
 
     async def on_disconnect(self):
