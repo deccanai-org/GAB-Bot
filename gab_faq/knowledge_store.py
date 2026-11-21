@@ -384,6 +384,42 @@ class KnowledgeStore:
             rows = self._db.execute(f"SELECT {_DOC_COLUMNS} FROM documents WHERE name=?", (name,))
             return self._doc(rows[0]) if rows else None
 
+    def latest_version_text(self, name: str) -> str | None:
+        """Body of the newest versions row for this document name, if any."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT text FROM versions WHERE name=? ORDER BY id DESC LIMIT 1", (name,)
+            )
+            return rows[0]["text"] if rows else None
+
+    def published_for_answers(self) -> list[StoredDocument]:
+        """FAQs the bot must answer from: status=current, body from the latest versions row
+        when history exists (so a publish/rollback always wins over a stale documents.text)."""
+        published = self.list_documents("current")
+        out: list[StoredDocument] = []
+        for doc in published:
+            latest = self.latest_version_text(doc.name)
+            if latest is not None and latest != doc.text:
+                log.info(
+                    "Using latest versions row for %s (documents.text was behind history)",
+                    doc.name,
+                )
+                out.append(
+                    StoredDocument(
+                        doc.name,
+                        doc.status,
+                        latest,
+                        doc.external_processing_approved,
+                        doc.source_sha256,
+                        doc.source_filename,
+                        doc.updated_at,
+                        doc.updated_by,
+                    )
+                )
+            else:
+                out.append(doc)
+        return out
+
     def history(self, name: str, limit: int = 30) -> list[dict]:
         with self._lock:
             return self._db.execute(
@@ -816,7 +852,12 @@ class StoreSource:
         revision = self.store.revision()
         if revision == self._revision and any(live_dir.glob("*.md")):
             return False
-        published = self.store.list_documents("current")
+        # Prefer latest versions.* body for each published name (versioning source of truth).
+        published = (
+            self.store.published_for_answers()
+            if hasattr(self.store, "published_for_answers")
+            else self.store.list_documents("current")
+        )
         if not published:
             self._revision = revision
             return self._seed_if_empty(live_dir)

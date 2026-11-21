@@ -193,6 +193,20 @@ def test_rollback_restores_an_earlier_version_as_a_new_version(store):
         store.rollback("a.md", 999999, "pm")
 
 
+def test_published_for_answers_prefers_latest_versions_row(store):
+    publish(store, "a.md", doc(ids=("A1",)))
+    store.save_text("a.md", doc(ids=("A1", "A2")), "pm")
+    # Simulate documents.text lagging behind versions (manual DB drift / race).
+    with store._lock, store._tx():
+        store._db.execute(
+            "UPDATE documents SET text=? WHERE name=?",
+            (doc(ids=("A1",)), "a.md"),
+        )
+    served = store.published_for_answers()
+    assert len(served) == 1
+    assert "A2." in served[0].text
+
+
 def test_audit_log_records_who_did_what(store):
     publish(store, "a.md", doc(), actor="priya")
     assert {(r["actor"], r["action"]) for r in store.audit_log()} >= {
